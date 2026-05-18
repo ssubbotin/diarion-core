@@ -10,9 +10,17 @@ This repository contains the planning artefacts for **Diarion** — a public web
 2. `docs/specs/2026-05-18-diarion-decision-log.md` — the §9 decision log. Authoritative answer set for the strategic questions (identity model, monetisation, governance, open-core architecture).
 3. `TZ.md` — the original project brief (vision, gap analysis, must-haves, architecture sketch, phasing, risks). When this disagrees with the decision log or Phase 1 spec, the later document wins.
 
-**Current state: M0 scaffolding milestone complete.** Tag `m0-scaffolding` marks the tip of M0. The repo now boots end-to-end: `make dev` brings up Postgres + Redis; `make api` and `make web` run the API stub and SvelteKit frontend; `make lint`/`test`/`vuln` all pass (note: `govulncheck` is strict and will fail if the local Go toolchain has known stdlib advisories — upgrade Go to the latest patch release to clear them). Three Dockerfiles build, GitHub Actions CI workflow is in place. M0 details: see `docs/superpowers/plans/2026-05-18-diarion-phase-1-m0-scaffolding.md` (gitignored — not in the repo).
+**Current state: M1 database milestone complete.** Tag `m1-database` marks the tip of M1. The repo now has:
+- All 8 Phase 1 tables migrated via `golang-migrate` (embedded migrations in `internal/db/migrations/`).
+- sqlc-generated query layer in `internal/db/dbgen/` covering all 8 entities.
+- Config loaded from env via `internal/config`.
+- `diarion-api` opens a `pgxpool.Pool`, runs migrations on startup behind an advisory lock, and `/readyz` pings the DB.
+- Graceful shutdown on SIGINT/SIGTERM.
+- Integration tests gated behind `//go:build integration` so `make test` runs without Docker; `make test-integration` runs the full 22-test suite against ephemeral Postgres via testcontainers-go.
 
-**Next milestone: M1 — Database + sqlc + migrations.** When ready, the milestone plan is written via the `writing-plans` skill, then executed via `subagent-driven-development`. The full M0–M9 sequence is in the Phase 1 spec's §2.1; M1 will introduce all 8 tables, the sqlc-generated query layer, golang-migrate runner, and testcontainers-Postgres integration tests.
+Both M0 (`m0-scaffolding`) and M1 (`m1-database`) tags exist on `main`. M0 and M1 plans live in `docs/superpowers/plans/` (gitignored).
+
+**Next milestone: M2 — Google OAuth + sessions + /api/v1/me.** M2 introduces the auth handlers, session cookies, OAuth state Redis storage, and the first authenticated endpoint. Plan via `writing-plans`, execute via `subagent-driven-development`.
 
 ## Things to know that aren't obvious from the docs
 
