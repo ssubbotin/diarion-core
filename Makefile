@@ -1,4 +1,4 @@
-.PHONY: help dev infra-up infra-down api mcp web build test lint vuln tidy clean
+.PHONY: help dev infra-up infra-down api mcp web build test test-integration lint vuln tidy clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "%-20s %s\n", $$1, $$2}'
@@ -28,9 +28,12 @@ build: ## Build all binaries and the web bundle
 	go build -o bin/diarion-mcp ./cmd/diarion-mcp
 	cd web && npm run build
 
-test: ## Run Go and Node test suites
+test: ## Run Go unit tests + Node tests (integration tests require make test-integration)
 	go test ./...
 	cd web && npm test --if-present
+
+test-integration: ## Run integration tests (requires Docker)
+	go test -timeout 300s -count=1 -tags=integration ./...
 
 lint: ## Run linters
 	golangci-lint run ./...

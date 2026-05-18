@@ -42,3 +42,10 @@ The full DCO text: <https://developercertificate.org/>.
 
 Do not open public issues for security vulnerabilities. Email
 ssubbotin@gmail.com with details. We aim to acknowledge within 48 hours.
+
+## Running tests
+
+- `make test` — unit tests only, no Docker required.
+- `make test-integration` — integration tests; spins up ephemeral Postgres
+  containers via testcontainers-go (Docker must be running).
+- CI runs both on every PR.

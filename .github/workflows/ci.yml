@@ -29,6 +29,9 @@ jobs:
       - name: test
         run: go test ./...
 
+      - name: test integration
+        run: go test -timeout 300s -count=1 -tags=integration ./internal/db/...
+
       - uses: golangci/golangci-lint-action@v6
         with:
           version: latest
