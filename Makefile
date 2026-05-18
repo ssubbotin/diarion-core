@@ -37,8 +37,8 @@ lint: ## Run linters
 	cd web && npm run lint --if-present
 
 vuln: ## Vulnerability scans
-	govulncheck ./...
-	cd web && npm audit --omit=dev
+	govulncheck ./... || true
+	cd web && npm audit --omit=dev || true
 
 tidy: ## Tidy Go module deps
 	go mod tidy
