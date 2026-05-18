@@ -9,12 +9,18 @@ import (
 )
 
 type Querier interface {
+	DeleteAllSessionsForUser(ctx context.Context, userID int64) error
+	DeleteExpiredSessions(ctx context.Context) (int64, error)
+	DeleteSession(ctx context.Context, id int64) error
+	GetSessionByToken(ctx context.Context, sessionToken string) (Session, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByGoogleSub(ctx context.Context, googleSub string) (User, error)
 	GetUserByID(ctx context.Context, id int64) (User, error)
+	InsertSession(ctx context.Context, arg InsertSessionParams) (Session, error)
 	InsertUser(ctx context.Context, arg InsertUserParams) (User, error)
 	MarkUserDeleted(ctx context.Context, id int64) error
 	RestoreUser(ctx context.Context, id int64) error
+	TouchSession(ctx context.Context, id int64) error
 	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (User, error)
 }
 
