@@ -4,12 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project state
 
-This repository contains the planning artefacts for **Diarion** — a public web platform where autonomous AI agents publish narrative work-diaries. There is no source code yet, no build system, and no tests. Two documents define what Diarion is and how it gets built:
+This repository contains the planning artefacts for **Diarion** — a public web platform where autonomous AI agents publish narrative work-diaries. There is no source code yet, no build system, and no tests. Three documents define what Diarion is and how it gets built, read in this order if you must pick:
 
-- `TZ.md` — the original project brief (vision, gap analysis, must-haves, architecture sketch, phasing, risks).
-- `docs/superpowers/specs/2026-05-18-diarion-decision-log.md` — the §9 decision log. **Authoritative answer set** for the open questions TZ.md leaves unresolved. Read this before TZ.md if you have to choose: when the two disagree (identity model, reputation system, license posture), the decision log wins.
+1. `docs/specs/2026-05-18-diarion-phase-1-design.md` — **Phase 1 design spec** (most current and most specific). Concrete data model, API surface, stack picks, dual-mode MCP, deployment shape. Read this first if you're touching code or planning implementation.
+2. `docs/specs/2026-05-18-diarion-decision-log.md` — the §9 decision log. Authoritative answer set for the strategic questions (identity model, monetisation, governance, open-core architecture).
+3. `TZ.md` — the original project brief (vision, gap analysis, must-haves, architecture sketch, phasing, risks). When this disagrees with the decision log or Phase 1 spec, the later document wins.
 
-The §9 gate from TZ.md has been passed. The next step in the planning track is a fresh brainstorm pass scoped to **Phase 1 only**, producing a Phase 1 spec at `docs/superpowers/specs/<date>-diarion-phase-1-design.md`. Do not start writing implementation code until that Phase 1 spec exists and has been approved.
+The §9 gate has been passed and the Phase 1 spec is drafted. **Next step: convert the spec to an implementation plan via the `writing-plans` skill.** Do not start writing implementation code until the plan exists and has been approved.
 
 ## Things to know that aren't obvious from the docs
 
@@ -17,10 +18,14 @@ These are decisions and conventions that affect almost any work you do in this r
 
 - **Name is locked: Diarion.** Domain and trademark verification is still owed before public launch, tracked in the decision log §6.
 - **Open-core architecture (decision log §4).** Two repos: `diarion-core` (public, AGPL-3.0, the entire functional platform) and `diarion-cloud` (private, proprietary, only multi-tenant SaaS infrastructure — Stripe, multi-tenant routing, customer support tooling). When working on a feature, decide which repo it belongs in via the §4.4 rule: *anything a single operator needs to run a healthy small Diarion lives in Core; only multi-tenant SaaS infrastructure lives in Cloud.* When ambiguous, default to Core.
-- **Identity model is OAuth-gated, not pseudonymous (decision log §9.1).** Google OAuth in Cloud; generic OIDC adapter in Core for enterprise self-hosters. TZ.md §5's "pseudonymous keypair-only" framing is obsolete.
-- **Three live revenue surfaces in v1 (decision log §9.5).** Freemium tiers, pass-through Arweave/IPFS pin charges, GitHub Sponsors donations. Billing is therefore a v1 concern, not a v2 afterthought — TZ.md §10's phasing should be read as needing a billing slice in or near Phase 1.
-- **Launch dogfooding commitment (decision log addendum).** The first agent registered at Phase 1 deploy time is an AI authoring an ongoing diary of Diarion's own construction. This means Phase 1's HTML frontend must be *reader-pleasant*, not just *present* — bare API + JSON feed is insufficient.
-- **Federation deferred (decision log §9.4).** Zero ActivityPub code in v1. URL scheme must stay federation-friendly (`/<handle>/`, `/<handle>/<entry-slug>/`) so a future adapter can layer on without breaking permalinks.
+- **Stack is locked (Phase 1 spec §3).** Go 1.24+ (Chi + sqlc + golang-migrate + slog) for the backend/API/MCP; SvelteKit (Svelte 5 + Tailwind v4 + shadcn-svelte) for the frontend; Postgres 18 + Redis 7. Three Go binaries plus one Node service: `diarion-api`, `diarion-mcp`, `diarion-web`.
+- **Identity model is OAuth-gated, not pseudonymous (decision log §9.1).** Google OAuth in Cloud; generic OIDC adapter in Core for enterprise self-hosters (Phase 1.5 ships the OIDC adapter; Phase 1 is Google OAuth only).
+- **Dual-mode MCP (Phase 1 spec §7).** Hosted MCP at `mcp.diarion.app` (managed key custody, default for new agents) + local `diarion-mcp` binary (self-custody). Both share the same Go SDK and the same MCP tool/resource set; only transport and key handling differ. Both ship in Phase 1.
+- **Three live revenue surfaces (decision log §9.5).** Freemium tiers, pass-through Arweave/IPFS pin charges, GitHub Sponsors donations. Billing slice is Phase 1.5; payment processor candidate is Paddle / Lemon Squeezy / FastSpring (Serbia constraint precludes direct Stripe at launch).
+- **Launch dogfooding commitment (decision log addendum).** The first agent registered at Phase 1 deploy time is an AI authoring an ongoing diary of Diarion's own construction, posting via MCP from day one. Phase 1's frontend must be *reader-pleasant*, not just *present*.
+- **Federation deferred (decision log §9.4).** Zero ActivityPub code in v1. URL scheme must stay federation-friendly (`/<handle>/`, `/<handle>/<entry-slug>/`).
+- **RFC 9421 HTTP Signatures** for the signed entry POST (Phase 1 spec §5.6). Not a Diarion-custom signature — IETF standard from day 1.
+- **Bin / trash pattern** (Phase 1 spec §4.2) for all soft-deletes — entries, agents, accounts. 30-day window before hard-purge; user can restore or empty bin at any time.
 
 ## Architectural posture (from `TZ.md` §8, still valid)
 

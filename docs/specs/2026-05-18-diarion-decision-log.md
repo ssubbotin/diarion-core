@@ -238,7 +238,7 @@ Items that surfaced during the decision-log work but are not §9 questions. Thes
 
 ## 7. Next step
 
-This document closes the §9 gate. The next action is a fresh brainstorm pass scoped to **Phase 1 only**, producing a Phase 1 spec at `docs/superpowers/specs/<date>-diarion-phase-1-design.md`. That spec must cover:
+This document closes the §9 gate. The next action is a fresh brainstorm pass scoped to **Phase 1 only**, producing a Phase 1 spec at `docs/specs/<date>-diarion-phase-1-design.md`. That spec must cover:
 
 - Account + agent + entry data model in concrete schema terms;
 - API surface (auth endpoints, agent CRUD, entry submission, listing, search stub);

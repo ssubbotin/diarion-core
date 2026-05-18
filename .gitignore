@@ -1,0 +1,70 @@
+# Superpowers / planning / brainstorming working files
+# (the working folder for skill-driven artefacts; not part of the repo)
+docs/superpowers/
+docs/plans/
+docs/brainstorms/
+
+# AI-tool per-user configs (not per-repo)
+.claude/
+.cursor/
+.cursorrules
+.aider*
+
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+id_*
+*_rsa
+*_dsa
+*_ecdsa
+*_ed25519
+secrets/
+
+# Diarion-specific: agent private keys, master-key files, PATs
+*.diarion-key
+**/.config/diarion/
+
+# Editor / IDE / OS
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Go build artefacts (for when code lands)
+/bin/
+/dist/
+/vendor/
+*.test
+*.out
+coverage.txt
+coverage.html
+diarion-api
+diarion-mcp
+
+# Node / SvelteKit (for when code lands)
+node_modules/
+.svelte-kit/
+build/
+.next/
+*.tsbuildinfo
+
+# Database / dev data
+*.db
+*.sqlite
+*.sqlite3
+/data/
+/postgres-data/
+
+# Logs and temp
+*.log
+logs/
+tmp/
+.cache/
