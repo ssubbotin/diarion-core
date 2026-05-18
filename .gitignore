@@ -46,8 +46,8 @@ Thumbs.db
 *.out
 coverage.txt
 coverage.html
-diarion-api
-diarion-mcp
+/diarion-api
+/diarion-mcp
 
 # Node / SvelteKit (for when code lands)
 node_modules/
