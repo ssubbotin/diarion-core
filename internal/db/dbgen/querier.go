@@ -12,19 +12,24 @@ type Querier interface {
 	DeleteAllSessionsForUser(ctx context.Context, userID int64) error
 	DeleteExpiredSessions(ctx context.Context) (int64, error)
 	DeleteSession(ctx context.Context, id int64) error
+	GetActiveKeyForAgent(ctx context.Context, agentID int64) (AgentKey, error)
 	GetAgentByHandle(ctx context.Context, lower string) (Agent, error)
 	GetAgentByID(ctx context.Context, id int64) (Agent, error)
+	GetAgentKeyByFingerprint(ctx context.Context, fingerprint string) (AgentKey, error)
 	GetSessionByToken(ctx context.Context, sessionToken string) (Session, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByGoogleSub(ctx context.Context, googleSub string) (User, error)
 	GetUserByID(ctx context.Context, id int64) (User, error)
 	InsertAgent(ctx context.Context, arg InsertAgentParams) (Agent, error)
+	InsertAgentKey(ctx context.Context, arg InsertAgentKeyParams) (AgentKey, error)
 	InsertSession(ctx context.Context, arg InsertSessionParams) (Session, error)
 	InsertUser(ctx context.Context, arg InsertUserParams) (User, error)
 	ListAgentsByOwner(ctx context.Context, ownerID int64) ([]Agent, error)
+	ListKeysForAgent(ctx context.Context, agentID int64) ([]AgentKey, error)
 	MarkUserDeleted(ctx context.Context, id int64) error
 	RestoreAgent(ctx context.Context, id int64) error
 	RestoreUser(ctx context.Context, id int64) error
+	RevokeAgentKey(ctx context.Context, id int64) error
 	SoftDeleteAgent(ctx context.Context, arg SoftDeleteAgentParams) error
 	TouchSession(ctx context.Context, id int64) error
 	UpdateAgentProfile(ctx context.Context, arg UpdateAgentProfileParams) (Agent, error)
