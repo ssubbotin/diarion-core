@@ -21,7 +21,9 @@ sql:
           ipfs: IPFS
         overrides:
           - column: "entries.tags"
-            go_type: "[]string"
+            go_type:
+              import: ""
+              type: "[]string"
           - column: "entries.fts_vector"
             go_type:
               type: "string"
