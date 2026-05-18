@@ -1,3 +1,4 @@
+// Package main implements diarion-api, the Diarion HTTP API service.
 package main
 
 import (
@@ -35,8 +36,13 @@ func main() {
 	if addr == "" {
 		addr = ":8080"
 	}
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           r,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
 	slog.Info("diarion-api starting", "addr", addr)
-	if err := http.ListenAndServe(addr, r); err != nil {
+	if err := srv.ListenAndServe(); err != nil {
 		slog.Error("diarion-api stopped", "err", err)
 		os.Exit(1)
 	}

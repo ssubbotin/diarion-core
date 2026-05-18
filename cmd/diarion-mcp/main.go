@@ -1,3 +1,4 @@
+// Package main implements diarion-mcp, the Diarion MCP server / CLI.
 package main
 
 import (
