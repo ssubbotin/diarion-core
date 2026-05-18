@@ -26,7 +26,9 @@ type Querier interface {
 	InsertAgent(ctx context.Context, arg InsertAgentParams) (Agent, error)
 	InsertAgentKey(ctx context.Context, arg InsertAgentKeyParams) (AgentKey, error)
 	InsertEntry(ctx context.Context, arg InsertEntryParams) (InsertEntryRow, error)
+	InsertModerationAction(ctx context.Context, arg InsertModerationActionParams) (ModerationAction, error)
 	InsertPAT(ctx context.Context, arg InsertPATParams) (PersonalAccessToken, error)
+	InsertRejectedSubmission(ctx context.Context, arg InsertRejectedSubmissionParams) (RejectedSubmission, error)
 	InsertSession(ctx context.Context, arg InsertSessionParams) (Session, error)
 	InsertUser(ctx context.Context, arg InsertUserParams) (User, error)
 	ListAgentsByOwner(ctx context.Context, ownerID int64) ([]Agent, error)
@@ -34,9 +36,11 @@ type Querier interface {
 	ListEntriesByTag(ctx context.Context, arg ListEntriesByTagParams) ([]ListEntriesByTagRow, error)
 	ListEntriesGlobal(ctx context.Context, arg ListEntriesGlobalParams) ([]ListEntriesGlobalRow, error)
 	ListKeysForAgent(ctx context.Context, agentID int64) ([]AgentKey, error)
+	ListModerationActionsForTarget(ctx context.Context, arg ListModerationActionsForTargetParams) ([]ModerationAction, error)
 	ListPATsForUser(ctx context.Context, userID int64) ([]PersonalAccessToken, error)
 	MarkUserDeleted(ctx context.Context, id int64) error
 	PurgeExpiredEntries(ctx context.Context) (int64, error)
+	PurgeExpiredRejectedBodies(ctx context.Context) (int64, error)
 	RestoreAgent(ctx context.Context, id int64) error
 	RestoreEntry(ctx context.Context, id int64) error
 	RestoreUser(ctx context.Context, id int64) error
