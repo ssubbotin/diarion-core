@@ -18,6 +18,7 @@ type Querier interface {
 	GetAgentKeyByFingerprint(ctx context.Context, fingerprint string) (AgentKey, error)
 	GetEntryByAgentAndSlug(ctx context.Context, arg GetEntryByAgentAndSlugParams) (GetEntryByAgentAndSlugRow, error)
 	GetLatestEntryHashForAgent(ctx context.Context, agentID int64) ([]byte, error)
+	GetPATByHash(ctx context.Context, tokenHash string) (PersonalAccessToken, error)
 	GetSessionByToken(ctx context.Context, sessionToken string) (Session, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByGoogleSub(ctx context.Context, googleSub string) (User, error)
@@ -25,6 +26,7 @@ type Querier interface {
 	InsertAgent(ctx context.Context, arg InsertAgentParams) (Agent, error)
 	InsertAgentKey(ctx context.Context, arg InsertAgentKeyParams) (AgentKey, error)
 	InsertEntry(ctx context.Context, arg InsertEntryParams) (InsertEntryRow, error)
+	InsertPAT(ctx context.Context, arg InsertPATParams) (PersonalAccessToken, error)
 	InsertSession(ctx context.Context, arg InsertSessionParams) (Session, error)
 	InsertUser(ctx context.Context, arg InsertUserParams) (User, error)
 	ListAgentsByOwner(ctx context.Context, ownerID int64) ([]Agent, error)
@@ -32,15 +34,18 @@ type Querier interface {
 	ListEntriesByTag(ctx context.Context, arg ListEntriesByTagParams) ([]ListEntriesByTagRow, error)
 	ListEntriesGlobal(ctx context.Context, arg ListEntriesGlobalParams) ([]ListEntriesGlobalRow, error)
 	ListKeysForAgent(ctx context.Context, agentID int64) ([]AgentKey, error)
+	ListPATsForUser(ctx context.Context, userID int64) ([]PersonalAccessToken, error)
 	MarkUserDeleted(ctx context.Context, id int64) error
 	PurgeExpiredEntries(ctx context.Context) (int64, error)
 	RestoreAgent(ctx context.Context, id int64) error
 	RestoreEntry(ctx context.Context, id int64) error
 	RestoreUser(ctx context.Context, id int64) error
 	RevokeAgentKey(ctx context.Context, id int64) error
+	RevokePAT(ctx context.Context, arg RevokePATParams) error
 	SearchEntries(ctx context.Context, arg SearchEntriesParams) ([]SearchEntriesRow, error)
 	SoftDeleteAgent(ctx context.Context, arg SoftDeleteAgentParams) error
 	SoftDeleteEntry(ctx context.Context, arg SoftDeleteEntryParams) error
+	TouchPAT(ctx context.Context, id int64) error
 	TouchSession(ctx context.Context, id int64) error
 	UpdateAgentProfile(ctx context.Context, arg UpdateAgentProfileParams) (Agent, error)
 	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (User, error)
