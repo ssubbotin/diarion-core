@@ -10,17 +10,19 @@ This repository contains the planning artefacts for **Diarion** — a public web
 2. `docs/specs/2026-05-18-diarion-decision-log.md` — the §9 decision log. Authoritative answer set for the strategic questions (identity model, monetisation, governance, open-core architecture).
 3. `TZ.md` — the original project brief (vision, gap analysis, must-haves, architecture sketch, phasing, risks). When this disagrees with the decision log or Phase 1 spec, the later document wins.
 
-**Current state: M1 database milestone complete.** Tag `m1-database` marks the tip of M1. The repo now has:
-- All 8 Phase 1 tables migrated via `golang-migrate` (embedded migrations in `internal/db/migrations/`).
-- sqlc-generated query layer in `internal/db/dbgen/` covering all 8 entities.
-- Config loaded from env via `internal/config`.
-- `diarion-api` opens a `pgxpool.Pool`, runs migrations on startup behind an advisory lock, and `/readyz` pings the DB.
-- Graceful shutdown on SIGINT/SIGTERM.
-- Integration tests gated behind `//go:build integration` so `make test` runs without Docker; `make test-integration` runs the full 22-test suite against ephemeral Postgres via testcontainers-go.
+**Current state: M2 auth milestone complete.** Tag `m2-auth` marks the tip of M2. On top of M1:
+- Google OAuth + PKCE flow (`/auth/google`, `/auth/google/callback`).
+- Server-side sessions via the `diarion_session` HTTP-only cookie; 30-day TTL; `Lax` SameSite (callback-safe).
+- `internal/auth/oauth` abstracts Provider — Google in production, FakeProvider in tests.
+- `internal/auth/session` issues, looks up, and revokes sessions (`/auth/logout`, `/auth/logout-all`).
+- `internal/auth/pat` mints `diarion_pat_<hex>` Personal Access Tokens; server stores only `sha256(plaintext)`.
+- `internal/middleware/auth` resolves cookie OR `Authorization: Bearer …` PAT to a `*authmw.User` in request context; suspended/deleted users are treated as anonymous.
+- `GET /api/v1/me` and `POST/GET/DELETE /api/v1/me/tokens` are live. PATs cannot mint other PATs (browser-session only).
+- `/readyz` now pings both Postgres and Redis.
 
-Both M0 (`m0-scaffolding`) and M1 (`m1-database`) tags exist on `main`. M0 and M1 plans live in `docs/superpowers/plans/` (gitignored).
+Tags on `main`: `m0-scaffolding`, `m1-database`, `m2-auth`. Origin: `git@github.com:ssubbotin/diarion-core.git`.
 
-**Next milestone: M2 — Google OAuth + sessions + /api/v1/me.** M2 introduces the auth handlers, session cookies, OAuth state Redis storage, and the first authenticated endpoint. Plan via `writing-plans`, execute via `subagent-driven-development`.
+**Next milestone: M3 — Agent CRUD + managed-key custody.** Create agent (managed-mode default), list / edit / soft-delete, encrypted private-key envelope (AES-256-GCM with the DIARION_MASTER_KEY DEK-wrapping pattern), key rotation. Plan via `writing-plans`, execute via `subagent-driven-development`.
 
 ## Things to know that aren't obvious from the docs
 
