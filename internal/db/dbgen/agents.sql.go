@@ -24,7 +24,7 @@ func (q *Queries) GetAgentByHandle(ctx context.Context, lower string) (Agent, er
 		&i.Handle,
 		&i.DisplayName,
 		&i.Bio,
-		&i.AvatarUrl,
+		&i.AvatarURL,
 		&i.ShowOperatorPublicly,
 		&i.KeyCustody,
 		&i.StackProvider,
@@ -54,7 +54,7 @@ func (q *Queries) GetAgentByID(ctx context.Context, id int64) (Agent, error) {
 		&i.Handle,
 		&i.DisplayName,
 		&i.Bio,
-		&i.AvatarUrl,
+		&i.AvatarURL,
 		&i.ShowOperatorPublicly,
 		&i.KeyCustody,
 		&i.StackProvider,
@@ -85,7 +85,7 @@ type InsertAgentParams struct {
 	Handle               string  `json:"handle"`
 	DisplayName          string  `json:"display_name"`
 	Bio                  *string `json:"bio"`
-	AvatarUrl            *string `json:"avatar_url"`
+	AvatarURL            *string `json:"avatar_url"`
 	ShowOperatorPublicly bool    `json:"show_operator_publicly"`
 	KeyCustody           string  `json:"key_custody"`
 	StackProvider        *string `json:"stack_provider"`
@@ -100,7 +100,7 @@ func (q *Queries) InsertAgent(ctx context.Context, arg InsertAgentParams) (Agent
 		arg.Handle,
 		arg.DisplayName,
 		arg.Bio,
-		arg.AvatarUrl,
+		arg.AvatarURL,
 		arg.ShowOperatorPublicly,
 		arg.KeyCustody,
 		arg.StackProvider,
@@ -115,7 +115,7 @@ func (q *Queries) InsertAgent(ctx context.Context, arg InsertAgentParams) (Agent
 		&i.Handle,
 		&i.DisplayName,
 		&i.Bio,
-		&i.AvatarUrl,
+		&i.AvatarURL,
 		&i.ShowOperatorPublicly,
 		&i.KeyCustody,
 		&i.StackProvider,
@@ -154,7 +154,7 @@ func (q *Queries) ListAgentsByOwner(ctx context.Context, ownerID int64) ([]Agent
 			&i.Handle,
 			&i.DisplayName,
 			&i.Bio,
-			&i.AvatarUrl,
+			&i.AvatarURL,
 			&i.ShowOperatorPublicly,
 			&i.KeyCustody,
 			&i.StackProvider,
@@ -230,7 +230,7 @@ type UpdateAgentProfileParams struct {
 	ID                   int64   `json:"id"`
 	DisplayName          string  `json:"display_name"`
 	Bio                  *string `json:"bio"`
-	AvatarUrl            *string `json:"avatar_url"`
+	AvatarURL            *string `json:"avatar_url"`
 	ShowOperatorPublicly bool    `json:"show_operator_publicly"`
 	StackProvider        *string `json:"stack_provider"`
 	StackFamily          *string `json:"stack_family"`
@@ -243,7 +243,7 @@ func (q *Queries) UpdateAgentProfile(ctx context.Context, arg UpdateAgentProfile
 		arg.ID,
 		arg.DisplayName,
 		arg.Bio,
-		arg.AvatarUrl,
+		arg.AvatarURL,
 		arg.ShowOperatorPublicly,
 		arg.StackProvider,
 		arg.StackFamily,
@@ -257,7 +257,7 @@ func (q *Queries) UpdateAgentProfile(ctx context.Context, arg UpdateAgentProfile
 		&i.Handle,
 		&i.DisplayName,
 		&i.Bio,
-		&i.AvatarUrl,
+		&i.AvatarURL,
 		&i.ShowOperatorPublicly,
 		&i.KeyCustody,
 		&i.StackProvider,

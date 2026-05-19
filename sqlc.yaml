@@ -19,6 +19,10 @@ sql:
           pat: PAT
           uuid: UUID
           ipfs: IPFS
+          url: URL
+          html: HTML
+          avatar_url: AvatarURL
+          body_html: BodyHTML
         overrides:
           - column: "entries.tags"
             go_type:

@@ -35,7 +35,7 @@ type GetEntryByAgentAndSlugRow struct {
 	Slug          string             `json:"slug"`
 	Title         string             `json:"title"`
 	BodyMarkdown  string             `json:"body_markdown"`
-	BodyHtml      string             `json:"body_html"`
+	BodyHTML      string             `json:"body_html"`
 	Tags          []string           `json:"tags"`
 	Project       *string            `json:"project"`
 	Frontmatter   []byte             `json:"frontmatter"`
@@ -59,7 +59,7 @@ func (q *Queries) GetEntryByAgentAndSlug(ctx context.Context, arg GetEntryByAgen
 		&i.Slug,
 		&i.Title,
 		&i.BodyMarkdown,
-		&i.BodyHtml,
+		&i.BodyHTML,
 		&i.Tags,
 		&i.Project,
 		&i.Frontmatter,
@@ -110,7 +110,7 @@ type InsertEntryParams struct {
 	Slug          string   `json:"slug"`
 	Title         string   `json:"title"`
 	BodyMarkdown  string   `json:"body_markdown"`
-	BodyHtml      string   `json:"body_html"`
+	BodyHTML      string   `json:"body_html"`
 	Tags          []string `json:"tags"`
 	Project       *string  `json:"project"`
 	Frontmatter   []byte   `json:"frontmatter"`
@@ -127,7 +127,7 @@ type InsertEntryRow struct {
 	Slug          string             `json:"slug"`
 	Title         string             `json:"title"`
 	BodyMarkdown  string             `json:"body_markdown"`
-	BodyHtml      string             `json:"body_html"`
+	BodyHTML      string             `json:"body_html"`
 	Tags          []string           `json:"tags"`
 	Project       *string            `json:"project"`
 	Frontmatter   []byte             `json:"frontmatter"`
@@ -148,7 +148,7 @@ func (q *Queries) InsertEntry(ctx context.Context, arg InsertEntryParams) (Inser
 		arg.Slug,
 		arg.Title,
 		arg.BodyMarkdown,
-		arg.BodyHtml,
+		arg.BodyHTML,
 		arg.Tags,
 		arg.Project,
 		arg.Frontmatter,
@@ -165,7 +165,7 @@ func (q *Queries) InsertEntry(ctx context.Context, arg InsertEntryParams) (Inser
 		&i.Slug,
 		&i.Title,
 		&i.BodyMarkdown,
-		&i.BodyHtml,
+		&i.BodyHTML,
 		&i.Tags,
 		&i.Project,
 		&i.Frontmatter,
@@ -207,7 +207,7 @@ type ListEntriesByAgentRow struct {
 	Slug          string             `json:"slug"`
 	Title         string             `json:"title"`
 	BodyMarkdown  string             `json:"body_markdown"`
-	BodyHtml      string             `json:"body_html"`
+	BodyHTML      string             `json:"body_html"`
 	Tags          []string           `json:"tags"`
 	Project       *string            `json:"project"`
 	Frontmatter   []byte             `json:"frontmatter"`
@@ -237,7 +237,7 @@ func (q *Queries) ListEntriesByAgent(ctx context.Context, arg ListEntriesByAgent
 			&i.Slug,
 			&i.Title,
 			&i.BodyMarkdown,
-			&i.BodyHtml,
+			&i.BodyHTML,
 			&i.Tags,
 			&i.Project,
 			&i.Frontmatter,
@@ -286,7 +286,7 @@ type ListEntriesByTagRow struct {
 	Slug          string             `json:"slug"`
 	Title         string             `json:"title"`
 	BodyMarkdown  string             `json:"body_markdown"`
-	BodyHtml      string             `json:"body_html"`
+	BodyHTML      string             `json:"body_html"`
 	Tags          []string           `json:"tags"`
 	Project       *string            `json:"project"`
 	Frontmatter   []byte             `json:"frontmatter"`
@@ -316,7 +316,7 @@ func (q *Queries) ListEntriesByTag(ctx context.Context, arg ListEntriesByTagPara
 			&i.Slug,
 			&i.Title,
 			&i.BodyMarkdown,
-			&i.BodyHtml,
+			&i.BodyHTML,
 			&i.Tags,
 			&i.Project,
 			&i.Frontmatter,
@@ -363,7 +363,7 @@ type ListEntriesGlobalRow struct {
 	Slug          string             `json:"slug"`
 	Title         string             `json:"title"`
 	BodyMarkdown  string             `json:"body_markdown"`
-	BodyHtml      string             `json:"body_html"`
+	BodyHTML      string             `json:"body_html"`
 	Tags          []string           `json:"tags"`
 	Project       *string            `json:"project"`
 	Frontmatter   []byte             `json:"frontmatter"`
@@ -393,7 +393,7 @@ func (q *Queries) ListEntriesGlobal(ctx context.Context, arg ListEntriesGlobalPa
 			&i.Slug,
 			&i.Title,
 			&i.BodyMarkdown,
-			&i.BodyHtml,
+			&i.BodyHTML,
 			&i.Tags,
 			&i.Project,
 			&i.Frontmatter,
@@ -469,7 +469,7 @@ type SearchEntriesRow struct {
 	Slug          string             `json:"slug"`
 	Title         string             `json:"title"`
 	BodyMarkdown  string             `json:"body_markdown"`
-	BodyHtml      string             `json:"body_html"`
+	BodyHTML      string             `json:"body_html"`
 	Tags          []string           `json:"tags"`
 	Project       *string            `json:"project"`
 	Frontmatter   []byte             `json:"frontmatter"`
@@ -500,7 +500,7 @@ func (q *Queries) SearchEntries(ctx context.Context, arg SearchEntriesParams) ([
 			&i.Slug,
 			&i.Title,
 			&i.BodyMarkdown,
-			&i.BodyHtml,
+			&i.BodyHTML,
 			&i.Tags,
 			&i.Project,
 			&i.Frontmatter,

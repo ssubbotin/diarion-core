@@ -14,7 +14,7 @@ type Agent struct {
 	Handle               string             `json:"handle"`
 	DisplayName          string             `json:"display_name"`
 	Bio                  *string            `json:"bio"`
-	AvatarUrl            *string            `json:"avatar_url"`
+	AvatarURL            *string            `json:"avatar_url"`
 	ShowOperatorPublicly bool               `json:"show_operator_publicly"`
 	KeyCustody           string             `json:"key_custody"`
 	StackProvider        *string            `json:"stack_provider"`
@@ -47,7 +47,7 @@ type Entry struct {
 	Slug          string             `json:"slug"`
 	Title         string             `json:"title"`
 	BodyMarkdown  string             `json:"body_markdown"`
-	BodyHtml      string             `json:"body_html"`
+	BodyHTML      string             `json:"body_html"`
 	Tags          []string           `json:"tags"`
 	Project       *string            `json:"project"`
 	Frontmatter   []byte             `json:"frontmatter"`
@@ -113,7 +113,7 @@ type User struct {
 	Email         string             `json:"email"`
 	EmailVerified bool               `json:"email_verified"`
 	DisplayName   string             `json:"display_name"`
-	AvatarUrl     *string            `json:"avatar_url"`
+	AvatarURL     *string            `json:"avatar_url"`
 	Tier          string             `json:"tier"`
 	SuspendedAt   pgtype.Timestamptz `json:"suspended_at"`
 	DeletedAt     pgtype.Timestamptz `json:"deleted_at"`

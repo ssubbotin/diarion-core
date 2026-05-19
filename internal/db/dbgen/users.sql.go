@@ -22,7 +22,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.Email,
 		&i.EmailVerified,
 		&i.DisplayName,
-		&i.AvatarUrl,
+		&i.AvatarURL,
 		&i.Tier,
 		&i.SuspendedAt,
 		&i.DeletedAt,
@@ -46,7 +46,7 @@ func (q *Queries) GetUserByGoogleSub(ctx context.Context, googleSub string) (Use
 		&i.Email,
 		&i.EmailVerified,
 		&i.DisplayName,
-		&i.AvatarUrl,
+		&i.AvatarURL,
 		&i.Tier,
 		&i.SuspendedAt,
 		&i.DeletedAt,
@@ -70,7 +70,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
 		&i.Email,
 		&i.EmailVerified,
 		&i.DisplayName,
-		&i.AvatarUrl,
+		&i.AvatarURL,
 		&i.Tier,
 		&i.SuspendedAt,
 		&i.DeletedAt,
@@ -92,7 +92,7 @@ type InsertUserParams struct {
 	Email         string  `json:"email"`
 	EmailVerified bool    `json:"email_verified"`
 	DisplayName   string  `json:"display_name"`
-	AvatarUrl     *string `json:"avatar_url"`
+	AvatarURL     *string `json:"avatar_url"`
 }
 
 func (q *Queries) InsertUser(ctx context.Context, arg InsertUserParams) (User, error) {
@@ -101,7 +101,7 @@ func (q *Queries) InsertUser(ctx context.Context, arg InsertUserParams) (User, e
 		arg.Email,
 		arg.EmailVerified,
 		arg.DisplayName,
-		arg.AvatarUrl,
+		arg.AvatarURL,
 	)
 	var i User
 	err := row.Scan(
@@ -110,7 +110,7 @@ func (q *Queries) InsertUser(ctx context.Context, arg InsertUserParams) (User, e
 		&i.Email,
 		&i.EmailVerified,
 		&i.DisplayName,
-		&i.AvatarUrl,
+		&i.AvatarURL,
 		&i.Tier,
 		&i.SuspendedAt,
 		&i.DeletedAt,
@@ -159,11 +159,11 @@ RETURNING id, google_sub, email, email_verified, display_name, avatar_url, tier,
 type UpdateUserProfileParams struct {
 	ID          int64   `json:"id"`
 	DisplayName string  `json:"display_name"`
-	AvatarUrl   *string `json:"avatar_url"`
+	AvatarURL   *string `json:"avatar_url"`
 }
 
 func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (User, error) {
-	row := q.db.QueryRow(ctx, updateUserProfile, arg.ID, arg.DisplayName, arg.AvatarUrl)
+	row := q.db.QueryRow(ctx, updateUserProfile, arg.ID, arg.DisplayName, arg.AvatarURL)
 	var i User
 	err := row.Scan(
 		&i.ID,
@@ -171,7 +171,7 @@ func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfilePa
 		&i.Email,
 		&i.EmailVerified,
 		&i.DisplayName,
-		&i.AvatarUrl,
+		&i.AvatarURL,
 		&i.Tier,
 		&i.SuspendedAt,
 		&i.DeletedAt,

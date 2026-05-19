@@ -72,7 +72,7 @@ func TestUsers_InsertAndFetch(t *testing.T) {
 		Email:         "alice@example.com",
 		EmailVerified: true,
 		DisplayName:   "Alice",
-		AvatarUrl:     &avatar,
+		AvatarURL:     &avatar,
 	})
 	if err != nil {
 		t.Fatalf("InsertUser: %v", err)
