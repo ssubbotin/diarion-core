@@ -10,33 +10,39 @@ import (
 
 // Config holds all runtime knobs sourced from env vars.
 type Config struct {
-	APIListen        string
-	BaseURL          string
-	DatabaseURL      string
-	RedisURL         string
-	SessionSecret    []byte // 32 raw bytes, derived from hex-encoded SESSION_SECRET
-	DiarionMasterKey []byte // 32 raw bytes, derived from hex-encoded DIARION_MASTER_KEY
+	APIListen               string
+	BaseURL                 string
+	DatabaseURL             string
+	RedisURL                string
+	SessionSecret           []byte
+	DiarionMasterKey        []byte
+	GoogleOAuthClientID     string
+	GoogleOAuthClientSecret string
 }
 
 // Load reads configuration from the process environment.
-// Required env vars: DATABASE_URL, REDIS_URL, BASE_URL, SESSION_SECRET, DIARION_MASTER_KEY.
-// Optional: API_LISTEN (default ":8080").
 func Load() (*Config, error) {
 	cfg := &Config{
-		APIListen:   envOr("API_LISTEN", ":8080"),
-		BaseURL:     os.Getenv("BASE_URL"),
-		DatabaseURL: os.Getenv("DATABASE_URL"),
-		RedisURL:    os.Getenv("REDIS_URL"),
+		APIListen:               envOr("API_LISTEN", ":8080"),
+		BaseURL:                 os.Getenv("BASE_URL"),
+		DatabaseURL:             os.Getenv("DATABASE_URL"),
+		RedisURL:                os.Getenv("REDIS_URL"),
+		GoogleOAuthClientID:     os.Getenv("GOOGLE_OAUTH_CLIENT_ID"),
+		GoogleOAuthClientSecret: os.Getenv("GOOGLE_OAUTH_CLIENT_SECRET"),
 	}
 
-	if cfg.DatabaseURL == "" {
-		return nil, errors.New("DATABASE_URL is required")
-	}
-	if cfg.RedisURL == "" {
-		return nil, errors.New("REDIS_URL is required")
-	}
-	if cfg.BaseURL == "" {
-		return nil, errors.New("BASE_URL is required")
+	for _, r := range []struct {
+		name, val string
+	}{
+		{"DATABASE_URL", cfg.DatabaseURL},
+		{"REDIS_URL", cfg.RedisURL},
+		{"BASE_URL", cfg.BaseURL},
+		{"GOOGLE_OAUTH_CLIENT_ID", cfg.GoogleOAuthClientID},
+		{"GOOGLE_OAUTH_CLIENT_SECRET", cfg.GoogleOAuthClientSecret},
+	} {
+		if r.val == "" {
+			return nil, errors.New(r.name + " is required")
+		}
 	}
 
 	var err error
