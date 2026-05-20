@@ -41,18 +41,6 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 // Stubs filled in subsequent tasks.
 
-// ListEntries returns the authenticated user's soft-deleted entries.
-// Implemented in Task 7.
-func (h *Handlers) ListEntries(w http.ResponseWriter, _ *http.Request) {
-	http.Error(w, "not implemented", http.StatusNotImplemented)
-}
-
-// ListAgents returns the authenticated user's soft-deleted agents.
-// Implemented in Task 7.
-func (h *Handlers) ListAgents(w http.ResponseWriter, _ *http.Request) {
-	http.Error(w, "not implemented", http.StatusNotImplemented)
-}
-
 // RestoreEntry un-deletes one of the user's soft-deleted entries.
 // Implemented in Task 8.
 func (h *Handlers) RestoreEntry(w http.ResponseWriter, _ *http.Request) {

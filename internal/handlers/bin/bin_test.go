@@ -204,3 +204,96 @@ func TestBinSummary_RequiresAuth(t *testing.T) {
 		t.Errorf("status = %d, want 401", resp.StatusCode)
 	}
 }
+
+func TestBinListEntries_ShowsDeleted(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	handle, priv, fp := createSelfAgent(t, h, "binl1")
+	id1, slug1 := publishAndDelete(t, h, handle, fp, priv, bytes.Repeat([]byte{0}, 32))
+
+	req, _ := http.NewRequest(http.MethodGet, h.URL+"/api/v1/me/bin/entries", nil)
+	req.AddCookie(h.Cookie)
+	resp, _ := http.DefaultClient.Do(req)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status = %d (%s)", resp.StatusCode, raw)
+	}
+	var got map[string]any
+	_ = json.NewDecoder(resp.Body).Decode(&got)
+	items, _ := got["entries"].([]any)
+	if len(items) != 1 {
+		t.Fatalf("len(entries) = %d, want 1", len(items))
+	}
+	first := items[0].(map[string]any)
+	if int64(first["id"].(float64)) != id1 {
+		t.Errorf("id mismatch")
+	}
+	if first["slug"] != slug1 {
+		t.Errorf("slug mismatch")
+	}
+	if first["agent_handle"] != handle {
+		t.Errorf("agent_handle = %v", first["agent_handle"])
+	}
+	if first["hard_delete_at"] == nil {
+		t.Errorf("hard_delete_at missing")
+	}
+}
+
+func TestBinListAgents_ShowsDeleted(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	handle, _, _ := createSelfAgent(t, h, "agent-binl")
+
+	// Delete the agent via the /me/agents endpoint (session).
+	req, _ := http.NewRequest(http.MethodDelete, h.URL+"/api/v1/me/agents/"+handle, nil)
+	req.AddCookie(h.Cookie)
+	dresp, _ := http.DefaultClient.Do(req)
+	dresp.Body.Close()
+	if dresp.StatusCode != http.StatusNoContent {
+		t.Fatalf("DELETE agent = %d", dresp.StatusCode)
+	}
+
+	req, _ = http.NewRequest(http.MethodGet, h.URL+"/api/v1/me/bin/agents", nil)
+	req.AddCookie(h.Cookie)
+	resp, _ := http.DefaultClient.Do(req)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d", resp.StatusCode)
+	}
+	var got map[string]any
+	_ = json.NewDecoder(resp.Body).Decode(&got)
+	items, _ := got["agents"].([]any)
+	if len(items) != 1 {
+		t.Fatalf("len(agents) = %d, want 1", len(items))
+	}
+}
+
+func TestBinListEntries_DoesNotLeakOtherUsers(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	handle, priv, fp := createSelfAgent(t, h, "binl2")
+	_, _ = publishAndDelete(t, h, handle, fp, priv, bytes.Repeat([]byte{0}, 32))
+
+	// Second user shouldn't see the first's binned entries.
+	ctx := context.Background()
+	u2, _ := h.Queries.InsertUser(ctx, dbgen.InsertUserParams{GoogleSub: "u2", Email: "u2@e.com", DisplayName: "U2"})
+	mgr := session.NewManager(h.Queries, false)
+	rec := httptest.NewRecorder()
+	_, _ = mgr.Issue(ctx, rec, u2.ID)
+	c2 := rec.Result().Cookies()[0]
+
+	req, _ := http.NewRequest(http.MethodGet, h.URL+"/api/v1/me/bin/entries", nil)
+	req.AddCookie(c2)
+	resp, _ := http.DefaultClient.Do(req)
+	defer resp.Body.Close()
+	var got map[string]any
+	_ = json.NewDecoder(resp.Body).Decode(&got)
+	items, _ := got["entries"].([]any)
+	if len(items) != 0 {
+		t.Errorf("second user must not see first's bin; got %d items", len(items))
+	}
+}
