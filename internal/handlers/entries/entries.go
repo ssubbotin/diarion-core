@@ -26,10 +26,11 @@ func New(q dbgen.Querier, v signing.Verifier, r RenderFunc) *Handlers {
 	return &Handlers{Queries: q, Verifier: v, Render: r}
 }
 
-// Register attaches /api/v1/agents/{handle}/entries and /latest-hash to r.
-// Caller must pass a router prefix-mounted at /api/v1.
+// Register attaches /api/v1/agents/{handle}/entries{,/{slug}} and /latest-hash
+// to r. Caller must pass a router prefix-mounted at /api/v1.
 func (h *Handlers) Register(r chi.Router) {
 	r.Post("/agents/{handle}/entries", h.Post)
+	r.Delete("/agents/{handle}/entries/{slug}", h.Delete)
 	r.Get("/agents/{handle}/latest-hash", h.LatestHash)
 }
 

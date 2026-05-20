@@ -23,6 +23,7 @@ import (
 	"github.com/diarion/diarion-core/internal/db/dbgen"
 	"github.com/diarion/diarion-core/internal/handlers/agents"
 	"github.com/diarion/diarion-core/internal/handlers/entries"
+	"github.com/diarion/diarion-core/internal/handlers/public"
 	"github.com/diarion/diarion-core/internal/markdown"
 	authmw "github.com/diarion/diarion-core/internal/middleware/auth"
 	"github.com/diarion/diarion-core/internal/signing"
@@ -84,12 +85,14 @@ func setupHarness(t *testing.T) *harness {
 	verifier := signing.NewVerifier(signing.NewDBKeyFetcher(q))
 	agentH := agents.New(q, master)
 	entH := entries.New(q, verifier, markdown.Render)
+	pubH := public.New(q)
 
 	r := chi.NewRouter()
 	r.Use(authmw.Middleware(q, mgr))
 	r.Route("/api/v1", func(r chi.Router) {
 		agentH.Register(r)
 		entH.Register(r)
+		pubH.Register(r)
 	})
 	srv := httptest.NewServer(r)
 	cleanup := func() {
@@ -413,5 +416,121 @@ func TestLatestHash_UnknownAgent_404(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Errorf("status = %d, want 404", resp.StatusCode)
+	}
+}
+
+func TestDeleteEntry_BySession(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	handle, priv, fp := createSelfAgent(t, h, "del1")
+	prev := bytes.Repeat([]byte{0}, 32)
+	body := []byte(`{"title":"t","body_markdown":"# t"}`)
+	resp := signedPOST(t, h, handle, fp, priv, prev, body)
+	if resp.StatusCode != http.StatusCreated {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("POST = %d (%s)", resp.StatusCode, raw)
+	}
+	var p map[string]any
+	_ = json.NewDecoder(resp.Body).Decode(&p)
+	resp.Body.Close()
+	slug, _ := p["slug"].(string)
+
+	// Session-authenticated DELETE.
+	req, _ := http.NewRequest(http.MethodDelete, h.URL+"/api/v1/agents/"+handle+"/entries/"+slug, nil)
+	req.AddCookie(h.Cookie)
+	dresp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("DELETE: %v", err)
+	}
+	defer dresp.Body.Close()
+	if dresp.StatusCode != http.StatusNoContent {
+		raw, _ := io.ReadAll(dresp.Body)
+		t.Fatalf("DELETE status = %d (%s)", dresp.StatusCode, raw)
+	}
+
+	// The entry is now invisible from the public read.
+	gresp, gerr := http.Get(h.URL + "/api/v1/agents/" + handle + "/entries/" + slug)
+	if gerr != nil {
+		t.Fatalf("GET after delete: %v", gerr)
+	}
+	defer gresp.Body.Close()
+	if gresp.StatusCode != http.StatusNotFound {
+		t.Errorf("GET after delete = %d, want 404", gresp.StatusCode)
+	}
+}
+
+func TestDeleteEntry_BySignature(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	handle, priv, fp := createSelfAgent(t, h, "del2")
+	prev := bytes.Repeat([]byte{0}, 32)
+	body := []byte(`{"title":"t","body_markdown":"# t"}`)
+	pr := signedPOST(t, h, handle, fp, priv, prev, body)
+	if pr.StatusCode != http.StatusCreated {
+		raw, _ := io.ReadAll(pr.Body)
+		t.Fatalf("POST = %d (%s)", pr.StatusCode, raw)
+	}
+	var p map[string]any
+	_ = json.NewDecoder(pr.Body).Decode(&p)
+	pr.Body.Close()
+	slug, _ := p["slug"].(string)
+	chainHashHex, _ := p["content_hash"].(string)
+	chainHash, _ := hex.DecodeString(chainHashHex)
+
+	// Signed DELETE: no cookie; sign with the same key.
+	delURL := h.URL + "/api/v1/agents/" + handle + "/entries/" + slug
+	req, _ := http.NewRequest(http.MethodDelete, delURL, bytes.NewReader(nil))
+	parsed, _ := url.Parse(delURL)
+	req.Host = parsed.Host
+	if err := signing.Sign(req, []byte{}, fp, priv, chainHash); err != nil {
+		t.Fatalf("Sign: %v", err)
+	}
+	dresp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("DELETE: %v", err)
+	}
+	defer dresp.Body.Close()
+	if dresp.StatusCode != http.StatusNoContent {
+		raw, _ := io.ReadAll(dresp.Body)
+		t.Fatalf("DELETE status = %d (%s)", dresp.StatusCode, raw)
+	}
+}
+
+func TestDeleteEntry_OtherUser_403(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	handle, priv, fp := createSelfAgent(t, h, "del3")
+	body := []byte(`{"title":"t","body_markdown":"# t"}`)
+	pr := signedPOST(t, h, handle, fp, priv, bytes.Repeat([]byte{0}, 32), body)
+	if pr.StatusCode != http.StatusCreated {
+		t.Fatalf("POST = %d", pr.StatusCode)
+	}
+	var p map[string]any
+	_ = json.NewDecoder(pr.Body).Decode(&p)
+	pr.Body.Close()
+	slug, _ := p["slug"].(string)
+
+	// Issue a different user's session.
+	ctx := context.Background()
+	other, _ := h.Queries.InsertUser(ctx, dbgen.InsertUserParams{
+		GoogleSub: "other-1", Email: "other@e.com", DisplayName: "Other",
+	})
+	mgr := session.NewManager(h.Queries, false)
+	rec := httptest.NewRecorder()
+	_, _ = mgr.Issue(ctx, rec, other.ID)
+	otherCookie := rec.Result().Cookies()[0]
+
+	req, _ := http.NewRequest(http.MethodDelete, h.URL+"/api/v1/agents/"+handle+"/entries/"+slug, nil)
+	req.AddCookie(otherCookie)
+	dresp, derr := http.DefaultClient.Do(req)
+	if derr != nil {
+		t.Fatalf("DELETE: %v", derr)
+	}
+	defer dresp.Body.Close()
+	if dresp.StatusCode != http.StatusNotFound && dresp.StatusCode != http.StatusForbidden {
+		t.Errorf("DELETE by stranger = %d, want 403 or 404", dresp.StatusCode)
 	}
 }
