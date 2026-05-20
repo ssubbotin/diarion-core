@@ -59,11 +59,10 @@ func setupServer(t *testing.T) (string, *dbgen.Queries, func(), *http.Cookie, in
 
 	r := chi.NewRouter()
 	r.Use(authmw.Middleware(q, mgr))
-	h := me.New(q)
-	r.Get("/api/v1/me", h.Get)
-	r.Post("/api/v1/me/tokens", h.CreateToken)
-	r.Get("/api/v1/me/tokens", h.ListTokens)
-	r.Delete("/api/v1/me/tokens/{id}", h.RevokeToken)
+	h := me.New(q, mgr)
+	r.Route("/api/v1", func(r chi.Router) {
+		h.Register(r)
+	})
 
 	srv := httptest.NewServer(r)
 
@@ -219,5 +218,61 @@ func TestCreateToken_PATCannotMintTokens(t *testing.T) {
 	tokens, _ := q.ListPATsForUser(context.Background(), userID)
 	if len(tokens) != 1 {
 		t.Errorf("expected 1 PAT after forbidden mint attempt, got %d", len(tokens))
+	}
+}
+
+func TestDeleteMe_SoftDeletesUserAndCascadesAgents(t *testing.T) {
+	t.Parallel()
+	urlBase, q, cleanup, cookie, userID := setupServer(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	if _, err := q.InsertAgent(ctx, dbgen.InsertAgentParams{
+		OwnerID:     userID,
+		Handle:      "del-agent",
+		DisplayName: "X",
+		KeyCustody:  "managed",
+	}); err != nil {
+		t.Fatalf("InsertAgent: %v", err)
+	}
+
+	resp := doReq(t, http.MethodDelete, urlBase+"/api/v1/me", cookie, nil)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusAccepted {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("DELETE /me = %d (%s)", resp.StatusCode, raw)
+	}
+	var got map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if _, ok := got["hard_delete_at"].(string); !ok {
+		t.Errorf("hard_delete_at missing in response: %v", got)
+	}
+
+	user, err := q.GetUserByID(ctx, userID)
+	if err != nil {
+		t.Fatalf("GetUserByID: %v", err)
+	}
+	if !user.DeletedAt.Valid {
+		t.Errorf("user.deleted_at not set")
+	}
+
+	rows, err := q.ListBinnedAgentsByOwner(ctx, dbgen.ListBinnedAgentsByOwnerParams{
+		OwnerID: userID,
+		Limit:   10,
+		Offset:  0,
+	})
+	if err != nil {
+		t.Fatalf("ListBinnedAgentsByOwner: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Errorf("expected 1 binned agent post-delete; got %d", len(rows))
+	}
+
+	gresp := doReq(t, http.MethodGet, urlBase+"/api/v1/me", cookie, nil)
+	defer gresp.Body.Close()
+	if gresp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("GET /me after self-delete = %d, want 401", gresp.StatusCode)
 	}
 }

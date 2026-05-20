@@ -79,7 +79,7 @@ func run() error {
 	)
 
 	authHandlers := auth.New(provider, sessions, queries, rClient)
-	meHandlers := me.New(queries)
+	meHandlers := me.New(queries, sessions)
 	agentHandlers := agents.New(queries, cfg.DiarionMasterKey)
 
 	verifier := signing.NewVerifier(signing.NewDBKeyFetcher(queries))
@@ -101,10 +101,7 @@ func run() error {
 	r.Post("/auth/logout-all", authHandlers.LogoutAll)
 
 	r.Route("/api/v1", func(r chi.Router) {
-		r.Get("/me", meHandlers.Get)
-		r.Post("/me/tokens", meHandlers.CreateToken)
-		r.Get("/me/tokens", meHandlers.ListTokens)
-		r.Delete("/me/tokens/{id}", meHandlers.RevokeToken)
+		meHandlers.Register(r)
 		agentHandlers.Register(r)
 		entryHandlers.Register(r)
 	})
