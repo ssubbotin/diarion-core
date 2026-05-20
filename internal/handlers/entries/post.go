@@ -222,8 +222,3 @@ func writeVerifyError(w http.ResponseWriter, r *http.Request, err error) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 	}
 }
-
-// LatestHash placeholder so the package compiles. Task 7 replaces it.
-func (h *Handlers) LatestHash(w http.ResponseWriter, _ *http.Request) {
-	http.Error(w, "not implemented", http.StatusNotImplemented)
-}

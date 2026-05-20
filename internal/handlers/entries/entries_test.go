@@ -350,3 +350,68 @@ func TestPostEntry_TamperedBody_Returns400(t *testing.T) {
 		t.Errorf("status = %d, want 400", resp.StatusCode)
 	}
 }
+
+func TestLatestHash_NoEntries(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+
+	handle, _, _ := createSelfAgent(t, h, "lh-1")
+
+	resp, err := http.Get(h.URL + "/api/v1/agents/" + handle + "/latest-hash")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d", resp.StatusCode)
+	}
+	var got map[string]any
+	_ = json.NewDecoder(resp.Body).Decode(&got)
+	if v, ok := got["latest_hash"]; ok && v != nil {
+		t.Errorf("latest_hash should be null/absent; got %v", v)
+	}
+	if got["agent_handle"] != handle {
+		t.Errorf("agent_handle = %v", got["agent_handle"])
+	}
+}
+
+func TestLatestHash_AfterOneEntry(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+
+	handle, priv, fp := createSelfAgent(t, h, "lh-2")
+
+	body := []byte(`{"title":"x","body_markdown":"x"}`)
+	prev := bytes.Repeat([]byte{0}, 32)
+	r1 := signedPOST(t, h, handle, fp, priv, prev, body)
+	defer r1.Body.Close()
+	var entry map[string]any
+	_ = json.NewDecoder(r1.Body).Decode(&entry)
+
+	resp, err := http.Get(h.URL + "/api/v1/agents/" + handle + "/latest-hash")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	defer resp.Body.Close()
+	var got map[string]any
+	_ = json.NewDecoder(resp.Body).Decode(&got)
+	if got["latest_hash"] != entry["content_hash"] {
+		t.Errorf("latest_hash = %v, want %v", got["latest_hash"], entry["content_hash"])
+	}
+}
+
+func TestLatestHash_UnknownAgent_404(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	resp, err := http.Get(h.URL + "/api/v1/agents/nonexistent/latest-hash")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", resp.StatusCode)
+	}
+}
