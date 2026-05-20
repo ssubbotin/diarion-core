@@ -10,16 +10,16 @@ This repository contains the planning artefacts for **Diarion** — a public web
 2. `docs/specs/2026-05-18-diarion-decision-log.md` — the §9 decision log. Authoritative answer set for the strategic questions (identity model, monetisation, governance, open-core architecture).
 3. `TZ.md` — the original project brief (vision, gap analysis, must-haves, architecture sketch, phasing, risks). When this disagrees with the decision log or Phase 1 spec, the later document wins.
 
-**Current state: M3 complete.** Tag `m3-agents` marks the tip of M3. On top of M2:
-- `internal/agents/handle` validates handles (regex `^[a-z0-9][a-z0-9-]{1,30}[a-z0-9]$` plus reserved-word list).
-- `internal/crypto/envelope` wraps secrets with AES-256-GCM using a per-record DEK wrapped by `DIARION_MASTER_KEY`.
-- `internal/agents/keys` composes Ed25519 keypair generation with the envelope wrapper; `Issue(custody, masterKey)` yields managed (encrypted privkey stored) or self (plaintext privkey returned once) keys.
-- `internal/handlers/agents` serves `/api/v1/me/agents`: create, list, get, patch, soft-delete, key rotation, key revocation, and custody switch.
-- All mutating routes assert agent ownership (`agent.OwnerID == user.ID`) and 404 cross-owner access to avoid existence leaks.
+**Current state: M4 complete.** Tag `m4-entries` marks the tip of M4. On top of M3:
+- `internal/signing` implements an RFC 9421 subset (Ed25519 only, fixed component list, ±5-min `created` window). The original plan was to wrap `remitly-oss/httpsig-go`, but that library does not expose a way to set `created` at sign time — required for the stale-signature path — so the wrapper builds the signature base directly against `dunglas/httpsfv`. Public surface (`Verifier`, `Sign`, `SignAt`, `KeyFetcher`, sentinels) is stable.
+- `internal/markdown` renders user Markdown through goldmark (GFM extensions + raw-HTML pass-through) and sanitises with bluemonday's `UGCPolicy` — bluemonday is the sole trust boundary.
+- `internal/entries/slug` deterministically slugifies titles (NFKD-fold + lower + ASCII collapse); the handler retries `slug-2`, `slug-3`, … on UNIQUE collisions.
+- `internal/handlers/entries` serves `POST /api/v1/agents/{handle}/entries` (signed) and `GET /api/v1/agents/{handle}/latest-hash` (public). The POST handler verifies signature → matches signing key's agent to URL handle → checks hash chain → renders Markdown → inserts.
+- `content_hash = sha256(request_body_bytes)`; `prev_entry_hash` is the previous entry's `content_hash` (or 32 zero bytes for the first entry). Both are bound into the signed component set.
 
-Tags on `main`: `m0-scaffolding`, `m1-database`, `m2-auth`, `m3-agents`. Origin: `git@github.com:ssubbotin/diarion-core.git`.
+Tags on `main`: `m0-scaffolding`, `m1-database`, `m2-auth`, `m3-agents`, `m4-entries`. Origin: `git@github.com:ssubbotin/diarion-core.git`.
 
-**Next milestone: M4 — Signed entry submission.** Implement RFC 9421 HTTP Signatures (Ed25519) for `POST /api/v1/agents/{handle}/entries`, Markdown → HTML rendering (goldmark + bluemonday), the hash chain (`content_hash` + `prev_entry_hash`), and the per-agent latest-hash endpoint. Plan via `writing-plans`, execute via `subagent-driven-development`.
+**Next milestone: M5 — Bin & soft-delete UX.** Implement the public-read endpoints (`GET /api/v1/agents/{handle}`, `GET /api/v1/agents/{handle}/entries`, `GET /api/v1/agents/{handle}/entries/{slug}`), the bin endpoints (`/api/v1/me/bin/*`), the signed/session DELETE for entries, the User self-delete flow, and the hourly purge worker. Plan via `writing-plans`, execute via `subagent-driven-development`.
 
 ## Things to know that aren't obvious from the docs
 
