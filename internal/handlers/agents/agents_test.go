@@ -336,3 +336,123 @@ func TestGet_NotOwned_Returns404(t *testing.T) {
 		t.Errorf("status = %d, want 404", resp.StatusCode)
 	}
 }
+
+func TestUpdate_OwnedFieldsChange(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	resp := doJSON(t, http.MethodPost, h.URL+"/api/v1/me/agents", h.Cookie,
+		map[string]any{"handle": "to-edit", "display_name": "Old", "key_custody": "managed"})
+	resp.Body.Close()
+
+	patch := map[string]any{
+		"display_name":           "New Name",
+		"bio":                    "An updated bio.",
+		"show_operator_publicly": true,
+		"stack_provider":         "anthropic",
+		"stack_family":           "claude",
+	}
+	updResp := doJSON(t, http.MethodPatch, h.URL+"/api/v1/me/agents/to-edit", h.Cookie, patch)
+	defer updResp.Body.Close()
+	if updResp.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(updResp.Body)
+		t.Fatalf("status = %d (%s)", updResp.StatusCode, string(raw))
+	}
+	var got map[string]any
+	_ = json.NewDecoder(updResp.Body).Decode(&got)
+	if got["display_name"] != "New Name" {
+		t.Errorf("display_name = %v", got["display_name"])
+	}
+	if got["bio"] != "An updated bio." {
+		t.Errorf("bio = %v", got["bio"])
+	}
+	if got["show_operator_publicly"] != true {
+		t.Errorf("show_operator_publicly = %v", got["show_operator_publicly"])
+	}
+	if got["stack_provider"] != "anthropic" {
+		t.Errorf("stack_provider = %v", got["stack_provider"])
+	}
+}
+
+func TestUpdate_DoesNotChangeHandleOrCustody(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	resp := doJSON(t, http.MethodPost, h.URL+"/api/v1/me/agents", h.Cookie,
+		map[string]any{"handle": "stable", "display_name": "Stable", "key_custody": "managed"})
+	resp.Body.Close()
+
+	// Try to sneak handle / key_custody changes through PATCH — should be ignored.
+	patch := map[string]any{
+		"handle":       "different",
+		"key_custody":  "self",
+		"display_name": "Stable 2",
+	}
+	updResp := doJSON(t, http.MethodPatch, h.URL+"/api/v1/me/agents/stable", h.Cookie, patch)
+	defer updResp.Body.Close()
+	if updResp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d", updResp.StatusCode)
+	}
+	var got map[string]any
+	_ = json.NewDecoder(updResp.Body).Decode(&got)
+	if got["handle"] != "stable" {
+		t.Errorf("handle changed: %v", got["handle"])
+	}
+	if got["key_custody"] != "managed" {
+		t.Errorf("key_custody changed: %v", got["key_custody"])
+	}
+	if got["display_name"] != "Stable 2" {
+		t.Errorf("display_name should have updated: %v", got["display_name"])
+	}
+}
+
+func TestDelete_SoftDeletes(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	ctx := context.Background()
+
+	resp := doJSON(t, http.MethodPost, h.URL+"/api/v1/me/agents", h.Cookie,
+		map[string]any{"handle": "doomed", "display_name": "Doomed", "key_custody": "managed"})
+	resp.Body.Close()
+
+	delResp := doJSON(t, http.MethodDelete, h.URL+"/api/v1/me/agents/doomed", h.Cookie, nil)
+	defer delResp.Body.Close()
+	if delResp.StatusCode != http.StatusNoContent {
+		t.Errorf("delete status = %d, want 204", delResp.StatusCode)
+	}
+
+	// Handle lookup should now skip the soft-deleted row.
+	if _, err := h.Queries.GetAgentByHandle(ctx, "doomed"); err == nil {
+		t.Errorf("GetAgentByHandle should not return soft-deleted agent")
+	}
+
+	// List should no longer surface it.
+	listResp := doJSON(t, http.MethodGet, h.URL+"/api/v1/me/agents", h.Cookie, nil)
+	defer listResp.Body.Close()
+	var items []map[string]any
+	_ = json.NewDecoder(listResp.Body).Decode(&items)
+	for _, it := range items {
+		if it["handle"] == "doomed" {
+			t.Errorf("list still shows soft-deleted agent")
+		}
+	}
+}
+
+func TestDelete_404OnAnotherOwnersAgent(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	ctx := context.Background()
+	other, _ := h.Queries.InsertUser(ctx, dbgen.InsertUserParams{
+		GoogleSub: "other-g-3", Email: "other3@e.com", DisplayName: "Other3",
+	})
+	_, _ = h.Queries.InsertAgent(ctx, dbgen.InsertAgentParams{
+		OwnerID: other.ID, Handle: "x-other-doomed", DisplayName: "Other Doomed", KeyCustody: "managed",
+	})
+	resp := doJSON(t, http.MethodDelete, h.URL+"/api/v1/me/agents/x-other-doomed", h.Cookie, nil)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", resp.StatusCode)
+	}
+}

@@ -133,12 +133,6 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, resp)
 }
 
-// Update is a stub replaced by Task 7.
-func (h *Handlers) Update(w http.ResponseWriter, _ *http.Request) { stub(w) }
-
-// Delete is a stub replaced by Task 7.
-func (h *Handlers) Delete(w http.ResponseWriter, _ *http.Request) { stub(w) }
-
 // RotateKey is a stub replaced by Task 8.
 func (h *Handlers) RotateKey(w http.ResponseWriter, _ *http.Request) { stub(w) }
 
