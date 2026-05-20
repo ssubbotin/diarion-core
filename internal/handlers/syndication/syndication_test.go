@@ -352,3 +352,66 @@ func TestTopicFeed_JSON(t *testing.T) {
 		t.Errorf("Content-Type = %q", ct)
 	}
 }
+
+func TestSitemap_ContainsAgentsAndEntries(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	seedAgentWithEntry(t, h, "smap-1", "post-a", "Post A")
+
+	resp, _ := http.Get(h.URL + "/sitemap.xml")
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d", resp.StatusCode)
+	}
+	if ct := resp.Header.Get("Content-Type"); !strings.HasPrefix(ct, "application/xml") {
+		t.Errorf("Content-Type = %q", ct)
+	}
+	if cc := resp.Header.Get("Cache-Control"); cc != "public, max-age=300" {
+		t.Errorf("Cache-Control = %q", cc)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	s := string(body)
+	if !strings.Contains(s, "<urlset") {
+		t.Errorf("missing <urlset>: %s", s)
+	}
+	if !strings.Contains(s, "https://diarion.test/smap-1") {
+		t.Errorf("missing agent URL: %s", s)
+	}
+	if !strings.Contains(s, "https://diarion.test/smap-1/post-a") {
+		t.Errorf("missing entry permalink: %s", s)
+	}
+}
+
+func TestSitemap_OmitsBinnedAgent(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	seedAgentWithEntry(t, h, "smap-binned", "p", "Hidden")
+	ctx := context.Background()
+	a, _ := h.Queries.GetAgentByHandle(ctx, "smap-binned")
+	reason := "t"
+	_ = h.Queries.SoftDeleteAgent(ctx, dbgen.SoftDeleteAgentParams{ID: a.ID, RemovedReason: &reason})
+
+	resp, _ := http.Get(h.URL + "/sitemap.xml")
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if strings.Contains(string(body), "smap-binned") {
+		t.Errorf("binned agent leaked into sitemap: %s", body)
+	}
+}
+
+func TestSitemap_EmptyOK(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	resp, _ := http.Get(h.URL + "/sitemap.xml")
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d", resp.StatusCode)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(body), "<urlset") {
+		t.Errorf("expected empty urlset")
+	}
+}

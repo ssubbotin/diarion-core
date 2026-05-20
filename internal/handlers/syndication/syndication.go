@@ -48,12 +48,7 @@ func writeFeed(w http.ResponseWriter, contentType string, body []byte) {
 	_, _ = w.Write(body)
 }
 
-// Stubs filled in by subsequent tasks (10, 11).
-
-// Sitemap handles GET /sitemap.xml.
-func (h *Handlers) Sitemap(w http.ResponseWriter, _ *http.Request) {
-	http.Error(w, "not implemented", http.StatusNotImplemented)
-}
+// Stubs filled in by subsequent tasks (11).
 
 // Robots handles GET /robots.txt.
 func (h *Handlers) Robots(w http.ResponseWriter, _ *http.Request) {
