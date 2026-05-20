@@ -10,19 +10,16 @@ This repository contains the planning artefacts for **Diarion** — a public web
 2. `docs/specs/2026-05-18-diarion-decision-log.md` — the §9 decision log. Authoritative answer set for the strategic questions (identity model, monetisation, governance, open-core architecture).
 3. `TZ.md` — the original project brief (vision, gap analysis, must-haves, architecture sketch, phasing, risks). When this disagrees with the decision log or Phase 1 spec, the later document wins.
 
-**Current state: M2 auth milestone complete.** Tag `m2-auth` marks the tip of M2. On top of M1:
-- Google OAuth + PKCE flow (`/auth/google`, `/auth/google/callback`).
-- Server-side sessions via the `diarion_session` HTTP-only cookie; 30-day TTL; `Lax` SameSite (callback-safe).
-- `internal/auth/oauth` abstracts Provider — Google in production, FakeProvider in tests.
-- `internal/auth/session` issues, looks up, and revokes sessions (`/auth/logout`, `/auth/logout-all`).
-- `internal/auth/pat` mints `diarion_pat_<hex>` Personal Access Tokens; server stores only `sha256(plaintext)`.
-- `internal/middleware/auth` resolves cookie OR `Authorization: Bearer …` PAT to a `*authmw.User` in request context; suspended/deleted users are treated as anonymous.
-- `GET /api/v1/me` and `POST/GET/DELETE /api/v1/me/tokens` are live. PATs cannot mint other PATs (browser-session only).
-- `/readyz` now pings both Postgres and Redis.
+**Current state: M3 complete.** Tag `m3-agents` marks the tip of M3. On top of M2:
+- `internal/agents/handle` validates handles (regex `^[a-z0-9][a-z0-9-]{1,30}[a-z0-9]$` plus reserved-word list).
+- `internal/crypto/envelope` wraps secrets with AES-256-GCM using a per-record DEK wrapped by `DIARION_MASTER_KEY`.
+- `internal/agents/keys` composes Ed25519 keypair generation with the envelope wrapper; `Issue(custody, masterKey)` yields managed (encrypted privkey stored) or self (plaintext privkey returned once) keys.
+- `internal/handlers/agents` serves `/api/v1/me/agents`: create, list, get, patch, soft-delete, key rotation, key revocation, and custody switch.
+- All mutating routes assert agent ownership (`agent.OwnerID == user.ID`) and 404 cross-owner access to avoid existence leaks.
 
-Tags on `main`: `m0-scaffolding`, `m1-database`, `m2-auth`. Origin: `git@github.com:ssubbotin/diarion-core.git`.
+Tags on `main`: `m0-scaffolding`, `m1-database`, `m2-auth`, `m3-agents`. Origin: `git@github.com:ssubbotin/diarion-core.git`.
 
-**Next milestone: M3 — Agent CRUD + managed-key custody.** Create agent (managed-mode default), list / edit / soft-delete, encrypted private-key envelope (AES-256-GCM with the DIARION_MASTER_KEY DEK-wrapping pattern), key rotation. Plan via `writing-plans`, execute via `subagent-driven-development`.
+**Next milestone: M4 — Signed entry submission.** Implement RFC 9421 HTTP Signatures (Ed25519) for `POST /api/v1/agents/{handle}/entries`, Markdown → HTML rendering (goldmark + bluemonday), the hash chain (`content_hash` + `prev_entry_hash`), and the per-agent latest-hash endpoint. Plan via `writing-plans`, execute via `subagent-driven-development`.
 
 ## Things to know that aren't obvious from the docs
 
