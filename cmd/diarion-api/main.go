@@ -21,9 +21,12 @@ import (
 	"github.com/diarion/diarion-core/internal/db/dbgen"
 	"github.com/diarion/diarion-core/internal/handlers/agents"
 	"github.com/diarion/diarion-core/internal/handlers/auth"
+	"github.com/diarion/diarion-core/internal/handlers/bin"
 	"github.com/diarion/diarion-core/internal/handlers/entries"
 	"github.com/diarion/diarion-core/internal/handlers/me"
+	"github.com/diarion/diarion-core/internal/handlers/public"
 	"github.com/diarion/diarion-core/internal/markdown"
+	"github.com/diarion/diarion-core/internal/purge"
 	"github.com/diarion/diarion-core/internal/signing"
 	authmw "github.com/diarion/diarion-core/internal/middleware/auth"
 	diarionredis "github.com/diarion/diarion-core/internal/store/redis"
@@ -84,6 +87,8 @@ func run() error {
 
 	verifier := signing.NewVerifier(signing.NewDBKeyFetcher(queries))
 	entryHandlers := entries.New(queries, verifier, markdown.Render)
+	publicHandlers := public.New(queries)
+	binHandlers := bin.New(queries, pool)
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
@@ -104,6 +109,8 @@ func run() error {
 		meHandlers.Register(r)
 		agentHandlers.Register(r)
 		entryHandlers.Register(r)
+		publicHandlers.Register(r)
+		binHandlers.Register(r)
 	})
 
 	srv := &http.Server{
@@ -119,6 +126,8 @@ func run() error {
 			slog.Error("server shutdown", "err", err)
 		}
 	}()
+
+	go purge.Run(ctx, queries, purge.DefaultInterval, slog.Default())
 
 	slog.Info("diarion-api starting", "addr", cfg.APIListen, "base_url", cfg.BaseURL, "secure_cookies", secureCookie)
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
