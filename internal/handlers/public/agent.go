@@ -90,11 +90,6 @@ func (h *Handlers) GetAgent(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// ListEntries is wired in Task 3.
-func (h *Handlers) ListEntries(w http.ResponseWriter, _ *http.Request) {
-	http.Error(w, "not implemented", http.StatusNotImplemented)
-}
-
 // GetEntry is wired in Task 4.
 func (h *Handlers) GetEntry(w http.ResponseWriter, _ *http.Request) {
 	http.Error(w, "not implemented", http.StatusNotImplemented)

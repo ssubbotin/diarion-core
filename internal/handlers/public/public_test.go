@@ -206,3 +206,98 @@ func TestPublicGetAgent_SuspendedIs404(t *testing.T) {
 		t.Errorf("status = %d, want 404 (suspended)", resp.StatusCode)
 	}
 }
+
+func seedEntry(t *testing.T, h *harness, agentID, keyID int64, slug, title string) {
+	t.Helper()
+	sig := make([]byte, 64)
+	hash := make([]byte, 32)
+	tags := []string{}
+	_, err := h.Queries.InsertEntry(context.Background(), dbgen.InsertEntryParams{
+		AgentID:      agentID,
+		SigningKeyID: keyID,
+		Slug:         slug,
+		Title:        title,
+		BodyMarkdown: "# " + title,
+		BodyHTML:     "<h1>" + title + "</h1>",
+		Tags:         tags,
+		Frontmatter:  []byte("{}"),
+		Signature:    sig,
+		ContentHash:  hash,
+	})
+	if err != nil {
+		t.Fatalf("InsertEntry: %v", err)
+	}
+}
+
+func keyIDForAgent(t *testing.T, h *harness, agentID int64) int64 {
+	t.Helper()
+	k, err := h.Queries.GetActiveKeyForAgent(context.Background(), agentID)
+	if err != nil {
+		t.Fatalf("GetActiveKeyForAgent: %v", err)
+	}
+	return k.ID
+}
+
+func TestPublicListEntries_Paginated(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	a := seedAgent(t, h, "carol", "Owner", false)
+	kid := keyIDForAgent(t, h, a.ID)
+	for i := 0; i < 5; i++ {
+		seedEntry(t, h, a.ID, kid, "entry-"+string(rune('a'+i)), "Title "+string(rune('A'+i)))
+	}
+
+	resp, _ := http.Get(h.URL + "/api/v1/agents/carol/entries?limit=2")
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status = %d (%s)", resp.StatusCode, raw)
+	}
+	var got map[string]any
+	_ = json.NewDecoder(resp.Body).Decode(&got)
+	items, _ := got["entries"].([]any)
+	if len(items) != 2 {
+		t.Errorf("len(entries) = %d, want 2", len(items))
+	}
+	if got["total"].(float64) != 5 {
+		t.Errorf("total = %v, want 5", got["total"])
+	}
+}
+
+func TestPublicListEntries_OmitsBinned(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	a := seedAgent(t, h, "dora", "Owner", false)
+	kid := keyIDForAgent(t, h, a.ID)
+	seedEntry(t, h, a.ID, kid, "live", "Live")
+	seedEntry(t, h, a.ID, kid, "dead", "Dead")
+	row, _ := h.Queries.GetEntryByAgentAndSlug(context.Background(), dbgen.GetEntryByAgentAndSlugParams{AgentID: a.ID, Slug: "dead"})
+	reason := "t"
+	_ = h.Queries.SoftDeleteEntry(context.Background(), dbgen.SoftDeleteEntryParams{ID: row.ID, RemovedReason: &reason})
+
+	resp, _ := http.Get(h.URL + "/api/v1/agents/dora/entries")
+	defer resp.Body.Close()
+	var got map[string]any
+	_ = json.NewDecoder(resp.Body).Decode(&got)
+	items, _ := got["entries"].([]any)
+	if len(items) != 1 {
+		t.Errorf("expected 1 entry (live only); got %d", len(items))
+	}
+	first, _ := items[0].(map[string]any)
+	if first["slug"] != "live" {
+		t.Errorf("slug = %v, want live", first["slug"])
+	}
+}
+
+func TestPublicListEntries_UnknownAgent_404(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	resp, _ := http.Get(h.URL + "/api/v1/agents/missing/entries")
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", resp.StatusCode)
+	}
+}
