@@ -40,11 +40,3 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
 }
-
-// Stubs filled in subsequent tasks.
-
-// EmptyAll hard-deletes every item in the authenticated user's bin.
-// Implemented in Task 9.
-func (h *Handlers) EmptyAll(w http.ResponseWriter, _ *http.Request) {
-	http.Error(w, "not implemented", http.StatusNotImplemented)
-}

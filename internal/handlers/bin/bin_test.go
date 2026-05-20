@@ -419,3 +419,38 @@ func TestBinRestoreEntry_OtherUser_404(t *testing.T) {
 }
 
 func intStr(n int64) string { return strconv.FormatInt(n, 10) }
+
+func TestBinEmptyAll(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	handle, priv, fp := createSelfAgent(t, h, "ea1")
+	_, _ = publishAndDelete(t, h, handle, fp, priv, bytes.Repeat([]byte{0}, 32))
+
+	// Soft-delete the agent too.
+	req, _ := http.NewRequest(http.MethodDelete, h.URL+"/api/v1/me/agents/"+handle, nil)
+	req.AddCookie(h.Cookie)
+	dresp, _ := http.DefaultClient.Do(req)
+	dresp.Body.Close()
+
+	// Empty the bin.
+	req, _ = http.NewRequest(http.MethodDelete, h.URL+"/api/v1/me/bin", nil)
+	req.AddCookie(h.Cookie)
+	resp, _ := http.DefaultClient.Do(req)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("empty bin = %d (%s)", resp.StatusCode, raw)
+	}
+
+	// Bin is now empty.
+	req, _ = http.NewRequest(http.MethodGet, h.URL+"/api/v1/me/bin", nil)
+	req.AddCookie(h.Cookie)
+	sresp, _ := http.DefaultClient.Do(req)
+	defer sresp.Body.Close()
+	var got map[string]any
+	_ = json.NewDecoder(sresp.Body).Decode(&got)
+	if got["entries_count"].(float64) != 0 || got["agents_count"].(float64) != 0 {
+		t.Errorf("bin not empty: %v", got)
+	}
+}

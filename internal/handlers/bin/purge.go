@@ -96,3 +96,55 @@ func (h *Handlers) purgeAgentTx(ctx context.Context, agentID int64) error {
 	}
 	return tx.Commit(ctx)
 }
+
+// EmptyAll handles DELETE /api/v1/me/bin — hard-delete every item in the
+// caller's bin in one transaction. Order matters:
+//  1. Entries belonging to binned agents (cascade those agents' entries too).
+//  2. Any other entries explicitly binned by the user.
+//  3. The binned agents themselves (agent_keys cascade by FK).
+func (h *Handlers) EmptyAll(w http.ResponseWriter, r *http.Request) {
+	u, ok := authmw.RequireUser(w, r)
+	if !ok {
+		return
+	}
+	if err := h.emptyAllTx(r.Context(), u.ID); err != nil {
+		slog.ErrorContext(r.Context(), "emptyAllTx", "err", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handlers) emptyAllTx(ctx context.Context, ownerID int64) error {
+	tx, err := h.Pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	q := dbgen.New(tx)
+
+	// Find binned agents to cascade their entries (live or not).
+	binnedAgents, err := q.ListBinnedAgentsByOwner(ctx, dbgen.ListBinnedAgentsByOwnerParams{
+		OwnerID: ownerID, Limit: 10000, Offset: 0,
+	})
+	if err != nil {
+		return err
+	}
+	for _, a := range binnedAgents {
+		if _, err := q.HardDeleteEntriesForAgent(ctx, a.ID); err != nil {
+			return err
+		}
+	}
+
+	// Hard-delete any remaining binned entries owned by this user (entries
+	// explicitly binned while their agent is still live).
+	if _, err := q.HardDeleteEntriesByOwner(ctx, ownerID); err != nil {
+		return err
+	}
+
+	// Hard-delete the binned agents.
+	if _, err := q.HardDeleteAgentsByOwner(ctx, ownerID); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
