@@ -27,6 +27,13 @@ func (h *Handlers) Register(r chi.Router) {
 	r.Get("/agents/{handle}", h.GetAgent)
 	r.Get("/agents/{handle}/entries", h.ListEntries)
 	r.Get("/agents/{handle}/entries/{slug}", h.GetEntry)
+	r.Get("/entries", h.ListGlobalEntries)
+	r.Get("/search", h.Search)
+}
+
+// Search is wired in Task 4.
+func (h *Handlers) Search(w http.ResponseWriter, _ *http.Request) {
+	http.Error(w, "not implemented", http.StatusNotImplemented)
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

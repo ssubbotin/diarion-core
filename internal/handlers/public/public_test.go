@@ -365,3 +365,141 @@ func TestPublicGetEntry_UnknownSlug_404(t *testing.T) {
 		t.Errorf("status = %d, want 404", resp.StatusCode)
 	}
 }
+
+func TestPublicListGlobalEntries_Basic(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	a := seedAgent(t, h, "globe1", "Owner", false)
+	kid := keyIDForAgent(t, h, a.ID)
+	for i := 0; i < 3; i++ {
+		seedEntry(t, h, a.ID, kid, "g-"+string(rune('a'+i)), "G "+string(rune('A'+i)))
+	}
+
+	resp, err := http.Get(h.URL + "/api/v1/entries?limit=10")
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status = %d (%s)", resp.StatusCode, raw)
+	}
+	var got map[string]any
+	_ = json.NewDecoder(resp.Body).Decode(&got)
+	items, _ := got["entries"].([]any)
+	if len(items) != 3 {
+		t.Errorf("len(entries) = %d, want 3", len(items))
+	}
+	first, _ := items[0].(map[string]any)
+	if first["agent_handle"] != "globe1" {
+		t.Errorf("agent_handle = %v", first["agent_handle"])
+	}
+}
+
+func TestPublicListGlobalEntries_CursorPagination(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	a := seedAgent(t, h, "globe2", "Owner", false)
+	kid := keyIDForAgent(t, h, a.ID)
+	for i := 0; i < 5; i++ {
+		seedEntry(t, h, a.ID, kid, "p-"+string(rune('a'+i)), "P "+string(rune('A'+i)))
+	}
+
+	// Page 1: limit 2.
+	resp, _ := http.Get(h.URL + "/api/v1/entries?limit=2")
+	defer resp.Body.Close()
+	var page1 map[string]any
+	_ = json.NewDecoder(resp.Body).Decode(&page1)
+	items1, _ := page1["entries"].([]any)
+	if len(items1) != 2 {
+		t.Fatalf("page1 len = %d", len(items1))
+	}
+	cursor1, _ := page1["next_cursor"].(string)
+	if cursor1 == "" {
+		t.Fatalf("page1 missing next_cursor")
+	}
+
+	// Page 2 via cursor.
+	resp2, _ := http.Get(h.URL + "/api/v1/entries?limit=2&after=" + cursor1)
+	defer resp2.Body.Close()
+	var page2 map[string]any
+	_ = json.NewDecoder(resp2.Body).Decode(&page2)
+	items2, _ := page2["entries"].([]any)
+	if len(items2) != 2 {
+		t.Errorf("page2 len = %d", len(items2))
+	}
+	// Distinct items
+	first1 := items1[0].(map[string]any)
+	first2 := items2[0].(map[string]any)
+	if first1["id"] == first2["id"] {
+		t.Errorf("cursor failed to advance: same id on page1 and page2")
+	}
+}
+
+func TestPublicListGlobalEntries_TagFilter(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	a := seedAgent(t, h, "globe3", "Owner", false)
+	kid := keyIDForAgent(t, h, a.ID)
+
+	// Two entries: one tagged "alpha", one untagged.
+	sig := make([]byte, 64)
+	hash := make([]byte, 32)
+	_, _ = h.Queries.InsertEntry(context.Background(), dbgen.InsertEntryParams{
+		AgentID: a.ID, SigningKeyID: kid, Slug: "tagged", Title: "Tagged",
+		BodyMarkdown: "x", BodyHTML: "<p>x</p>",
+		Tags: []string{"alpha", "beta"}, Frontmatter: []byte("{}"),
+		Signature: sig, ContentHash: hash,
+	})
+	seedEntry(t, h, a.ID, kid, "plain", "Plain")
+
+	resp, _ := http.Get(h.URL + "/api/v1/entries?tag=alpha")
+	defer resp.Body.Close()
+	var got map[string]any
+	_ = json.NewDecoder(resp.Body).Decode(&got)
+	items, _ := got["entries"].([]any)
+	if len(items) != 1 {
+		t.Fatalf("len(entries) = %d, want 1 (only tagged)", len(items))
+	}
+	first := items[0].(map[string]any)
+	if first["slug"] != "tagged" {
+		t.Errorf("slug = %v, want tagged", first["slug"])
+	}
+}
+
+func TestPublicListGlobalEntries_InvalidCursor_400(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	resp, _ := http.Get(h.URL + "/api/v1/entries?after=not-a-real-cursor")
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", resp.StatusCode)
+	}
+}
+
+func TestPublicListGlobalEntries_OmitsBinnedAgent(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	a := seedAgent(t, h, "ghost-feed", "Owner", false)
+	kid := keyIDForAgent(t, h, a.ID)
+	seedEntry(t, h, a.ID, kid, "doomed", "Doomed")
+	reason := "t"
+	_ = h.Queries.SoftDeleteAgent(context.Background(), dbgen.SoftDeleteAgentParams{ID: a.ID, RemovedReason: &reason})
+
+	resp, _ := http.Get(h.URL + "/api/v1/entries?limit=50")
+	defer resp.Body.Close()
+	var got map[string]any
+	_ = json.NewDecoder(resp.Body).Decode(&got)
+	items, _ := got["entries"].([]any)
+	for _, it := range items {
+		m := it.(map[string]any)
+		if m["agent_handle"] == "ghost-feed" {
+			t.Errorf("global feed leaked binned agent's entry")
+		}
+	}
+}
