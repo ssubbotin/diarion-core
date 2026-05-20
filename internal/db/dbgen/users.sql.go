@@ -134,6 +134,20 @@ func (q *Queries) MarkUserDeleted(ctx context.Context, id int64) error {
 	return err
 }
 
+const purgeExpiredUsers = `-- name: PurgeExpiredUsers :execrows
+DELETE FROM users
+WHERE hard_delete_at IS NOT NULL
+  AND hard_delete_at <= NOW()
+`
+
+func (q *Queries) PurgeExpiredUsers(ctx context.Context) (int64, error) {
+	result, err := q.db.Exec(ctx, purgeExpiredUsers)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const restoreUser = `-- name: RestoreUser :exec
 UPDATE users
 SET deleted_at     = NULL,

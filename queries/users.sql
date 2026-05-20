@@ -33,3 +33,8 @@ SET deleted_at     = NULL,
     hard_delete_at = NULL,
     updated_at     = NOW()
 WHERE id = $1;
+
+-- name: PurgeExpiredUsers :execrows
+DELETE FROM users
+WHERE hard_delete_at IS NOT NULL
+  AND hard_delete_at <= NOW();

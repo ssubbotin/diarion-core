@@ -11,6 +11,20 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countBinnedEntriesByOwner = `-- name: CountBinnedEntriesByOwner :one
+SELECT COUNT(*) FROM entries e
+JOIN agents a ON a.id = e.agent_id
+WHERE a.owner_id = $1
+  AND e.removed_at IS NOT NULL
+`
+
+func (q *Queries) CountBinnedEntriesByOwner(ctx context.Context, ownerID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, countBinnedEntriesByOwner, ownerID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const getEntryByAgentAndSlug = `-- name: GetEntryByAgentAndSlug :one
 SELECT id, agent_id, signing_key_id, slug, title,
        body_markdown, body_html, tags, project,
@@ -75,6 +89,130 @@ func (q *Queries) GetEntryByAgentAndSlug(ctx context.Context, arg GetEntryByAgen
 	return i, err
 }
 
+const getEntryByID = `-- name: GetEntryByID :one
+SELECT id, agent_id, signing_key_id, slug, title,
+       body_markdown, body_html, tags, project,
+       frontmatter, stack_override,
+       signature, content_hash, prev_entry_hash,
+       published_at, removed_at, hard_delete_at, removed_reason
+FROM entries
+WHERE id = $1
+`
+
+type GetEntryByIDRow struct {
+	ID            int64              `json:"id"`
+	AgentID       int64              `json:"agent_id"`
+	SigningKeyID  int64              `json:"signing_key_id"`
+	Slug          string             `json:"slug"`
+	Title         string             `json:"title"`
+	BodyMarkdown  string             `json:"body_markdown"`
+	BodyHTML      string             `json:"body_html"`
+	Tags          []string           `json:"tags"`
+	Project       *string            `json:"project"`
+	Frontmatter   []byte             `json:"frontmatter"`
+	StackOverride []byte             `json:"stack_override"`
+	Signature     []byte             `json:"signature"`
+	ContentHash   []byte             `json:"content_hash"`
+	PrevEntryHash []byte             `json:"prev_entry_hash"`
+	PublishedAt   pgtype.Timestamptz `json:"published_at"`
+	RemovedAt     pgtype.Timestamptz `json:"removed_at"`
+	HardDeleteAt  pgtype.Timestamptz `json:"hard_delete_at"`
+	RemovedReason *string            `json:"removed_reason"`
+}
+
+func (q *Queries) GetEntryByID(ctx context.Context, id int64) (GetEntryByIDRow, error) {
+	row := q.db.QueryRow(ctx, getEntryByID, id)
+	var i GetEntryByIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.AgentID,
+		&i.SigningKeyID,
+		&i.Slug,
+		&i.Title,
+		&i.BodyMarkdown,
+		&i.BodyHTML,
+		&i.Tags,
+		&i.Project,
+		&i.Frontmatter,
+		&i.StackOverride,
+		&i.Signature,
+		&i.ContentHash,
+		&i.PrevEntryHash,
+		&i.PublishedAt,
+		&i.RemovedAt,
+		&i.HardDeleteAt,
+		&i.RemovedReason,
+	)
+	return i, err
+}
+
+const getEntryByIDForOwner = `-- name: GetEntryByIDForOwner :one
+SELECT e.id, e.agent_id, e.signing_key_id, e.slug, e.title,
+       e.body_markdown, e.body_html, e.tags, e.project,
+       e.frontmatter, e.stack_override,
+       e.signature, e.content_hash, e.prev_entry_hash,
+       e.published_at, e.removed_at, e.hard_delete_at, e.removed_reason,
+       a.handle AS agent_handle
+FROM entries e
+JOIN agents a ON a.id = e.agent_id
+WHERE e.id = $1
+  AND a.owner_id = $2
+`
+
+type GetEntryByIDForOwnerParams struct {
+	ID      int64 `json:"id"`
+	OwnerID int64 `json:"owner_id"`
+}
+
+type GetEntryByIDForOwnerRow struct {
+	ID            int64              `json:"id"`
+	AgentID       int64              `json:"agent_id"`
+	SigningKeyID  int64              `json:"signing_key_id"`
+	Slug          string             `json:"slug"`
+	Title         string             `json:"title"`
+	BodyMarkdown  string             `json:"body_markdown"`
+	BodyHTML      string             `json:"body_html"`
+	Tags          []string           `json:"tags"`
+	Project       *string            `json:"project"`
+	Frontmatter   []byte             `json:"frontmatter"`
+	StackOverride []byte             `json:"stack_override"`
+	Signature     []byte             `json:"signature"`
+	ContentHash   []byte             `json:"content_hash"`
+	PrevEntryHash []byte             `json:"prev_entry_hash"`
+	PublishedAt   pgtype.Timestamptz `json:"published_at"`
+	RemovedAt     pgtype.Timestamptz `json:"removed_at"`
+	HardDeleteAt  pgtype.Timestamptz `json:"hard_delete_at"`
+	RemovedReason *string            `json:"removed_reason"`
+	AgentHandle   string             `json:"agent_handle"`
+}
+
+func (q *Queries) GetEntryByIDForOwner(ctx context.Context, arg GetEntryByIDForOwnerParams) (GetEntryByIDForOwnerRow, error) {
+	row := q.db.QueryRow(ctx, getEntryByIDForOwner, arg.ID, arg.OwnerID)
+	var i GetEntryByIDForOwnerRow
+	err := row.Scan(
+		&i.ID,
+		&i.AgentID,
+		&i.SigningKeyID,
+		&i.Slug,
+		&i.Title,
+		&i.BodyMarkdown,
+		&i.BodyHTML,
+		&i.Tags,
+		&i.Project,
+		&i.Frontmatter,
+		&i.StackOverride,
+		&i.Signature,
+		&i.ContentHash,
+		&i.PrevEntryHash,
+		&i.PublishedAt,
+		&i.RemovedAt,
+		&i.HardDeleteAt,
+		&i.RemovedReason,
+		&i.AgentHandle,
+	)
+	return i, err
+}
+
 const getLatestEntryHashForAgent = `-- name: GetLatestEntryHashForAgent :one
 SELECT content_hash FROM entries
 WHERE agent_id = $1
@@ -88,6 +226,83 @@ func (q *Queries) GetLatestEntryHashForAgent(ctx context.Context, agentID int64)
 	var content_hash []byte
 	err := row.Scan(&content_hash)
 	return content_hash, err
+}
+
+const hardDeleteEntriesByOwner = `-- name: HardDeleteEntriesByOwner :execrows
+DELETE FROM entries
+WHERE id IN (
+    SELECT e.id FROM entries e
+    JOIN agents a ON a.id = e.agent_id
+    WHERE a.owner_id = $1
+      AND e.removed_at IS NOT NULL
+)
+`
+
+func (q *Queries) HardDeleteEntriesByOwner(ctx context.Context, ownerID int64) (int64, error) {
+	result, err := q.db.Exec(ctx, hardDeleteEntriesByOwner, ownerID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const hardDeleteEntriesForAgent = `-- name: HardDeleteEntriesForAgent :execrows
+DELETE FROM entries WHERE agent_id = $1
+`
+
+func (q *Queries) HardDeleteEntriesForAgent(ctx context.Context, agentID int64) (int64, error) {
+	result, err := q.db.Exec(ctx, hardDeleteEntriesForAgent, agentID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const hardDeleteEntriesForExpiredAgents = `-- name: HardDeleteEntriesForExpiredAgents :execrows
+DELETE FROM entries
+WHERE agent_id IN (
+    SELECT id FROM agents
+    WHERE hard_delete_at IS NOT NULL
+      AND hard_delete_at <= NOW()
+)
+`
+
+func (q *Queries) HardDeleteEntriesForExpiredAgents(ctx context.Context) (int64, error) {
+	result, err := q.db.Exec(ctx, hardDeleteEntriesForExpiredAgents)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const hardDeleteEntriesForExpiredUsers = `-- name: HardDeleteEntriesForExpiredUsers :execrows
+DELETE FROM entries
+WHERE agent_id IN (
+    SELECT a.id FROM agents a
+    JOIN users u ON u.id = a.owner_id
+    WHERE u.hard_delete_at IS NOT NULL
+      AND u.hard_delete_at <= NOW()
+)
+`
+
+func (q *Queries) HardDeleteEntriesForExpiredUsers(ctx context.Context) (int64, error) {
+	result, err := q.db.Exec(ctx, hardDeleteEntriesForExpiredUsers)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const hardDeleteEntry = `-- name: HardDeleteEntry :execrows
+DELETE FROM entries WHERE id = $1
+`
+
+func (q *Queries) HardDeleteEntry(ctx context.Context, id int64) (int64, error) {
+	result, err := q.db.Exec(ctx, hardDeleteEntry, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const insertEntry = `-- name: InsertEntry :one
@@ -179,6 +394,70 @@ func (q *Queries) InsertEntry(ctx context.Context, arg InsertEntryParams) (Inser
 		&i.RemovedReason,
 	)
 	return i, err
+}
+
+const listBinnedEntriesByOwner = `-- name: ListBinnedEntriesByOwner :many
+SELECT e.id, e.agent_id, e.slug, e.title, e.tags, e.project,
+       e.published_at, e.removed_at, e.hard_delete_at, e.removed_reason,
+       a.handle AS agent_handle
+FROM entries e
+JOIN agents a ON a.id = e.agent_id
+WHERE a.owner_id = $1
+  AND e.removed_at IS NOT NULL
+ORDER BY e.removed_at DESC
+LIMIT $2 OFFSET $3
+`
+
+type ListBinnedEntriesByOwnerParams struct {
+	OwnerID int64 `json:"owner_id"`
+	Limit   int32 `json:"limit"`
+	Offset  int32 `json:"offset"`
+}
+
+type ListBinnedEntriesByOwnerRow struct {
+	ID            int64              `json:"id"`
+	AgentID       int64              `json:"agent_id"`
+	Slug          string             `json:"slug"`
+	Title         string             `json:"title"`
+	Tags          []string           `json:"tags"`
+	Project       *string            `json:"project"`
+	PublishedAt   pgtype.Timestamptz `json:"published_at"`
+	RemovedAt     pgtype.Timestamptz `json:"removed_at"`
+	HardDeleteAt  pgtype.Timestamptz `json:"hard_delete_at"`
+	RemovedReason *string            `json:"removed_reason"`
+	AgentHandle   string             `json:"agent_handle"`
+}
+
+func (q *Queries) ListBinnedEntriesByOwner(ctx context.Context, arg ListBinnedEntriesByOwnerParams) ([]ListBinnedEntriesByOwnerRow, error) {
+	rows, err := q.db.Query(ctx, listBinnedEntriesByOwner, arg.OwnerID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListBinnedEntriesByOwnerRow{}
+	for rows.Next() {
+		var i ListBinnedEntriesByOwnerRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.AgentID,
+			&i.Slug,
+			&i.Title,
+			&i.Tags,
+			&i.Project,
+			&i.PublishedAt,
+			&i.RemovedAt,
+			&i.HardDeleteAt,
+			&i.RemovedReason,
+			&i.AgentHandle,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listEntriesByAgent = `-- name: ListEntriesByAgent :many

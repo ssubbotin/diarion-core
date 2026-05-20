@@ -56,3 +56,58 @@ SET key_custody = $2,
     updated_at  = NOW()
 WHERE id = $1
 RETURNING *;
+
+-- name: GetAgentByIDAny :one
+-- Like GetAgentByID but returns the row even if removed_at IS NOT NULL.
+-- Used by bin operations that need to act on binned agents.
+SELECT * FROM agents WHERE id = $1;
+
+-- name: GetBinnedAgentForOwner :one
+SELECT * FROM agents
+WHERE id = $1
+  AND owner_id = $2
+  AND removed_at IS NOT NULL;
+
+-- name: ListBinnedAgentsByOwner :many
+SELECT id, handle, display_name, key_custody,
+       removed_at, hard_delete_at, removed_reason
+FROM agents
+WHERE owner_id = $1
+  AND removed_at IS NOT NULL
+ORDER BY removed_at DESC
+LIMIT $2 OFFSET $3;
+
+-- name: CountBinnedAgentsByOwner :one
+SELECT COUNT(*) FROM agents
+WHERE owner_id = $1
+  AND removed_at IS NOT NULL;
+
+-- name: SoftDeleteAgentsByUser :exec
+UPDATE agents
+SET removed_at     = COALESCE(removed_at, NOW()),
+    hard_delete_at = COALESCE(hard_delete_at, NOW() + INTERVAL '30 days'),
+    removed_reason = COALESCE(removed_reason, 'cascade:user-self-delete'),
+    updated_at     = NOW()
+WHERE owner_id = $1
+  AND removed_at IS NULL;
+
+-- name: HardDeleteAgent :execrows
+DELETE FROM agents WHERE id = $1;
+
+-- name: HardDeleteAgentsByOwner :execrows
+DELETE FROM agents
+WHERE owner_id = $1
+  AND removed_at IS NOT NULL;
+
+-- name: PurgeExpiredAgents :execrows
+DELETE FROM agents
+WHERE hard_delete_at IS NOT NULL
+  AND hard_delete_at <= NOW();
+
+-- name: HardDeleteAgentsForExpiredUsers :execrows
+DELETE FROM agents
+WHERE owner_id IN (
+    SELECT id FROM users
+    WHERE hard_delete_at IS NOT NULL
+      AND hard_delete_at <= NOW()
+);

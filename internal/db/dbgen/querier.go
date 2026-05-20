@@ -9,20 +9,37 @@ import (
 )
 
 type Querier interface {
+	CountBinnedAgentsByOwner(ctx context.Context, ownerID int64) (int64, error)
+	CountBinnedEntriesByOwner(ctx context.Context, ownerID int64) (int64, error)
 	DeleteAllSessionsForUser(ctx context.Context, userID int64) error
 	DeleteExpiredSessions(ctx context.Context) (int64, error)
 	DeleteSession(ctx context.Context, id int64) error
 	GetActiveKeyForAgent(ctx context.Context, agentID int64) (AgentKey, error)
 	GetAgentByHandle(ctx context.Context, lower string) (Agent, error)
 	GetAgentByID(ctx context.Context, id int64) (Agent, error)
+	// Like GetAgentByID but returns the row even if removed_at IS NOT NULL.
+	// Used by bin operations that need to act on binned agents.
+	GetAgentByIDAny(ctx context.Context, id int64) (Agent, error)
 	GetAgentKeyByFingerprint(ctx context.Context, fingerprint string) (AgentKey, error)
+	GetBinSummaryForOwner(ctx context.Context, ownerID int64) (GetBinSummaryForOwnerRow, error)
+	GetBinnedAgentForOwner(ctx context.Context, arg GetBinnedAgentForOwnerParams) (Agent, error)
 	GetEntryByAgentAndSlug(ctx context.Context, arg GetEntryByAgentAndSlugParams) (GetEntryByAgentAndSlugRow, error)
+	GetEntryByID(ctx context.Context, id int64) (GetEntryByIDRow, error)
+	GetEntryByIDForOwner(ctx context.Context, arg GetEntryByIDForOwnerParams) (GetEntryByIDForOwnerRow, error)
 	GetLatestEntryHashForAgent(ctx context.Context, agentID int64) ([]byte, error)
 	GetPATByHash(ctx context.Context, tokenHash string) (PersonalAccessToken, error)
 	GetSessionByToken(ctx context.Context, sessionToken string) (Session, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByGoogleSub(ctx context.Context, googleSub string) (User, error)
 	GetUserByID(ctx context.Context, id int64) (User, error)
+	HardDeleteAgent(ctx context.Context, id int64) (int64, error)
+	HardDeleteAgentsByOwner(ctx context.Context, ownerID int64) (int64, error)
+	HardDeleteAgentsForExpiredUsers(ctx context.Context) (int64, error)
+	HardDeleteEntriesByOwner(ctx context.Context, ownerID int64) (int64, error)
+	HardDeleteEntriesForAgent(ctx context.Context, agentID int64) (int64, error)
+	HardDeleteEntriesForExpiredAgents(ctx context.Context) (int64, error)
+	HardDeleteEntriesForExpiredUsers(ctx context.Context) (int64, error)
+	HardDeleteEntry(ctx context.Context, id int64) (int64, error)
 	InsertAgent(ctx context.Context, arg InsertAgentParams) (Agent, error)
 	InsertAgentKey(ctx context.Context, arg InsertAgentKeyParams) (AgentKey, error)
 	InsertEntry(ctx context.Context, arg InsertEntryParams) (InsertEntryRow, error)
@@ -32,6 +49,8 @@ type Querier interface {
 	InsertSession(ctx context.Context, arg InsertSessionParams) (Session, error)
 	InsertUser(ctx context.Context, arg InsertUserParams) (User, error)
 	ListAgentsByOwner(ctx context.Context, ownerID int64) ([]Agent, error)
+	ListBinnedAgentsByOwner(ctx context.Context, arg ListBinnedAgentsByOwnerParams) ([]ListBinnedAgentsByOwnerRow, error)
+	ListBinnedEntriesByOwner(ctx context.Context, arg ListBinnedEntriesByOwnerParams) ([]ListBinnedEntriesByOwnerRow, error)
 	ListEntriesByAgent(ctx context.Context, arg ListEntriesByAgentParams) ([]ListEntriesByAgentRow, error)
 	ListEntriesByTag(ctx context.Context, arg ListEntriesByTagParams) ([]ListEntriesByTagRow, error)
 	ListEntriesGlobal(ctx context.Context, arg ListEntriesGlobalParams) ([]ListEntriesGlobalRow, error)
@@ -39,8 +58,10 @@ type Querier interface {
 	ListModerationActionsForTarget(ctx context.Context, arg ListModerationActionsForTargetParams) ([]ModerationAction, error)
 	ListPATsForUser(ctx context.Context, userID int64) ([]PersonalAccessToken, error)
 	MarkUserDeleted(ctx context.Context, id int64) error
+	PurgeExpiredAgents(ctx context.Context) (int64, error)
 	PurgeExpiredEntries(ctx context.Context) (int64, error)
 	PurgeExpiredRejectedBodies(ctx context.Context) (int64, error)
+	PurgeExpiredUsers(ctx context.Context) (int64, error)
 	RestoreAgent(ctx context.Context, id int64) error
 	RestoreEntry(ctx context.Context, id int64) error
 	RestoreUser(ctx context.Context, id int64) error
@@ -49,6 +70,7 @@ type Querier interface {
 	RevokePAT(ctx context.Context, arg RevokePATParams) error
 	SearchEntries(ctx context.Context, arg SearchEntriesParams) ([]SearchEntriesRow, error)
 	SoftDeleteAgent(ctx context.Context, arg SoftDeleteAgentParams) error
+	SoftDeleteAgentsByUser(ctx context.Context, ownerID int64) error
 	SoftDeleteEntry(ctx context.Context, arg SoftDeleteEntryParams) error
 	TouchPAT(ctx context.Context, id int64) error
 	TouchSession(ctx context.Context, id int64) error

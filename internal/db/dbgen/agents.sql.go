@@ -7,7 +7,22 @@ package dbgen
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
+
+const countBinnedAgentsByOwner = `-- name: CountBinnedAgentsByOwner :one
+SELECT COUNT(*) FROM agents
+WHERE owner_id = $1
+  AND removed_at IS NOT NULL
+`
+
+func (q *Queries) CountBinnedAgentsByOwner(ctx context.Context, ownerID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, countBinnedAgentsByOwner, ownerID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
 
 const getAgentByHandle = `-- name: GetAgentByHandle :one
 SELECT id, owner_id, handle, display_name, bio, avatar_url, show_operator_publicly, key_custody, stack_provider, stack_family, stack_harness, stack_notes, suspended_at, removed_at, hard_delete_at, removed_reason, created_at, updated_at FROM agents
@@ -69,6 +84,119 @@ func (q *Queries) GetAgentByID(ctx context.Context, id int64) (Agent, error) {
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const getAgentByIDAny = `-- name: GetAgentByIDAny :one
+SELECT id, owner_id, handle, display_name, bio, avatar_url, show_operator_publicly, key_custody, stack_provider, stack_family, stack_harness, stack_notes, suspended_at, removed_at, hard_delete_at, removed_reason, created_at, updated_at FROM agents WHERE id = $1
+`
+
+// Like GetAgentByID but returns the row even if removed_at IS NOT NULL.
+// Used by bin operations that need to act on binned agents.
+func (q *Queries) GetAgentByIDAny(ctx context.Context, id int64) (Agent, error) {
+	row := q.db.QueryRow(ctx, getAgentByIDAny, id)
+	var i Agent
+	err := row.Scan(
+		&i.ID,
+		&i.OwnerID,
+		&i.Handle,
+		&i.DisplayName,
+		&i.Bio,
+		&i.AvatarURL,
+		&i.ShowOperatorPublicly,
+		&i.KeyCustody,
+		&i.StackProvider,
+		&i.StackFamily,
+		&i.StackHarness,
+		&i.StackNotes,
+		&i.SuspendedAt,
+		&i.RemovedAt,
+		&i.HardDeleteAt,
+		&i.RemovedReason,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getBinnedAgentForOwner = `-- name: GetBinnedAgentForOwner :one
+SELECT id, owner_id, handle, display_name, bio, avatar_url, show_operator_publicly, key_custody, stack_provider, stack_family, stack_harness, stack_notes, suspended_at, removed_at, hard_delete_at, removed_reason, created_at, updated_at FROM agents
+WHERE id = $1
+  AND owner_id = $2
+  AND removed_at IS NOT NULL
+`
+
+type GetBinnedAgentForOwnerParams struct {
+	ID      int64 `json:"id"`
+	OwnerID int64 `json:"owner_id"`
+}
+
+func (q *Queries) GetBinnedAgentForOwner(ctx context.Context, arg GetBinnedAgentForOwnerParams) (Agent, error) {
+	row := q.db.QueryRow(ctx, getBinnedAgentForOwner, arg.ID, arg.OwnerID)
+	var i Agent
+	err := row.Scan(
+		&i.ID,
+		&i.OwnerID,
+		&i.Handle,
+		&i.DisplayName,
+		&i.Bio,
+		&i.AvatarURL,
+		&i.ShowOperatorPublicly,
+		&i.KeyCustody,
+		&i.StackProvider,
+		&i.StackFamily,
+		&i.StackHarness,
+		&i.StackNotes,
+		&i.SuspendedAt,
+		&i.RemovedAt,
+		&i.HardDeleteAt,
+		&i.RemovedReason,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const hardDeleteAgent = `-- name: HardDeleteAgent :execrows
+DELETE FROM agents WHERE id = $1
+`
+
+func (q *Queries) HardDeleteAgent(ctx context.Context, id int64) (int64, error) {
+	result, err := q.db.Exec(ctx, hardDeleteAgent, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const hardDeleteAgentsByOwner = `-- name: HardDeleteAgentsByOwner :execrows
+DELETE FROM agents
+WHERE owner_id = $1
+  AND removed_at IS NOT NULL
+`
+
+func (q *Queries) HardDeleteAgentsByOwner(ctx context.Context, ownerID int64) (int64, error) {
+	result, err := q.db.Exec(ctx, hardDeleteAgentsByOwner, ownerID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const hardDeleteAgentsForExpiredUsers = `-- name: HardDeleteAgentsForExpiredUsers :execrows
+DELETE FROM agents
+WHERE owner_id IN (
+    SELECT id FROM users
+    WHERE hard_delete_at IS NOT NULL
+      AND hard_delete_at <= NOW()
+)
+`
+
+func (q *Queries) HardDeleteAgentsForExpiredUsers(ctx context.Context) (int64, error) {
+	result, err := q.db.Exec(ctx, hardDeleteAgentsForExpiredUsers)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const insertAgent = `-- name: InsertAgent :one
@@ -178,6 +306,74 @@ func (q *Queries) ListAgentsByOwner(ctx context.Context, ownerID int64) ([]Agent
 	return items, nil
 }
 
+const listBinnedAgentsByOwner = `-- name: ListBinnedAgentsByOwner :many
+SELECT id, handle, display_name, key_custody,
+       removed_at, hard_delete_at, removed_reason
+FROM agents
+WHERE owner_id = $1
+  AND removed_at IS NOT NULL
+ORDER BY removed_at DESC
+LIMIT $2 OFFSET $3
+`
+
+type ListBinnedAgentsByOwnerParams struct {
+	OwnerID int64 `json:"owner_id"`
+	Limit   int32 `json:"limit"`
+	Offset  int32 `json:"offset"`
+}
+
+type ListBinnedAgentsByOwnerRow struct {
+	ID            int64              `json:"id"`
+	Handle        string             `json:"handle"`
+	DisplayName   string             `json:"display_name"`
+	KeyCustody    string             `json:"key_custody"`
+	RemovedAt     pgtype.Timestamptz `json:"removed_at"`
+	HardDeleteAt  pgtype.Timestamptz `json:"hard_delete_at"`
+	RemovedReason *string            `json:"removed_reason"`
+}
+
+func (q *Queries) ListBinnedAgentsByOwner(ctx context.Context, arg ListBinnedAgentsByOwnerParams) ([]ListBinnedAgentsByOwnerRow, error) {
+	rows, err := q.db.Query(ctx, listBinnedAgentsByOwner, arg.OwnerID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListBinnedAgentsByOwnerRow{}
+	for rows.Next() {
+		var i ListBinnedAgentsByOwnerRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Handle,
+			&i.DisplayName,
+			&i.KeyCustody,
+			&i.RemovedAt,
+			&i.HardDeleteAt,
+			&i.RemovedReason,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const purgeExpiredAgents = `-- name: PurgeExpiredAgents :execrows
+DELETE FROM agents
+WHERE hard_delete_at IS NOT NULL
+  AND hard_delete_at <= NOW()
+`
+
+func (q *Queries) PurgeExpiredAgents(ctx context.Context) (int64, error) {
+	result, err := q.db.Exec(ctx, purgeExpiredAgents)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const restoreAgent = `-- name: RestoreAgent :exec
 UPDATE agents
 SET removed_at     = NULL,
@@ -208,6 +404,21 @@ type SoftDeleteAgentParams struct {
 
 func (q *Queries) SoftDeleteAgent(ctx context.Context, arg SoftDeleteAgentParams) error {
 	_, err := q.db.Exec(ctx, softDeleteAgent, arg.ID, arg.RemovedReason)
+	return err
+}
+
+const softDeleteAgentsByUser = `-- name: SoftDeleteAgentsByUser :exec
+UPDATE agents
+SET removed_at     = COALESCE(removed_at, NOW()),
+    hard_delete_at = COALESCE(hard_delete_at, NOW() + INTERVAL '30 days'),
+    removed_reason = COALESCE(removed_reason, 'cascade:user-self-delete'),
+    updated_at     = NOW()
+WHERE owner_id = $1
+  AND removed_at IS NULL
+`
+
+func (q *Queries) SoftDeleteAgentsByUser(ctx context.Context, ownerID int64) error {
+	_, err := q.db.Exec(ctx, softDeleteAgentsByUser, ownerID)
 	return err
 }
 
