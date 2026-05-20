@@ -211,6 +211,45 @@ func (q *Queries) SoftDeleteAgent(ctx context.Context, arg SoftDeleteAgentParams
 	return err
 }
 
+const updateAgentCustody = `-- name: UpdateAgentCustody :one
+UPDATE agents
+SET key_custody = $2,
+    updated_at  = NOW()
+WHERE id = $1
+RETURNING id, owner_id, handle, display_name, bio, avatar_url, show_operator_publicly, key_custody, stack_provider, stack_family, stack_harness, stack_notes, suspended_at, removed_at, hard_delete_at, removed_reason, created_at, updated_at
+`
+
+type UpdateAgentCustodyParams struct {
+	ID         int64  `json:"id"`
+	KeyCustody string `json:"key_custody"`
+}
+
+func (q *Queries) UpdateAgentCustody(ctx context.Context, arg UpdateAgentCustodyParams) (Agent, error) {
+	row := q.db.QueryRow(ctx, updateAgentCustody, arg.ID, arg.KeyCustody)
+	var i Agent
+	err := row.Scan(
+		&i.ID,
+		&i.OwnerID,
+		&i.Handle,
+		&i.DisplayName,
+		&i.Bio,
+		&i.AvatarURL,
+		&i.ShowOperatorPublicly,
+		&i.KeyCustody,
+		&i.StackProvider,
+		&i.StackFamily,
+		&i.StackHarness,
+		&i.StackNotes,
+		&i.SuspendedAt,
+		&i.RemovedAt,
+		&i.HardDeleteAt,
+		&i.RemovedReason,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const updateAgentProfile = `-- name: UpdateAgentProfile :one
 UPDATE agents
 SET display_name           = $2,

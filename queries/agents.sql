@@ -49,3 +49,10 @@ SET removed_at     = NULL,
     removed_reason = NULL,
     updated_at     = NOW()
 WHERE id = $1;
+
+-- name: UpdateAgentCustody :one
+UPDATE agents
+SET key_custody = $2,
+    updated_at  = NOW()
+WHERE id = $1
+RETURNING *;

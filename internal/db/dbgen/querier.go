@@ -45,12 +45,14 @@ type Querier interface {
 	RestoreEntry(ctx context.Context, id int64) error
 	RestoreUser(ctx context.Context, id int64) error
 	RevokeAgentKey(ctx context.Context, id int64) error
+	RevokeAllActiveKeysForAgent(ctx context.Context, agentID int64) error
 	RevokePAT(ctx context.Context, arg RevokePATParams) error
 	SearchEntries(ctx context.Context, arg SearchEntriesParams) ([]SearchEntriesRow, error)
 	SoftDeleteAgent(ctx context.Context, arg SoftDeleteAgentParams) error
 	SoftDeleteEntry(ctx context.Context, arg SoftDeleteEntryParams) error
 	TouchPAT(ctx context.Context, id int64) error
 	TouchSession(ctx context.Context, id int64) error
+	UpdateAgentCustody(ctx context.Context, arg UpdateAgentCustodyParams) (Agent, error)
 	UpdateAgentProfile(ctx context.Context, arg UpdateAgentProfileParams) (Agent, error)
 	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (User, error)
 }

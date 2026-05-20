@@ -23,3 +23,10 @@ UPDATE agent_keys
 SET status     = 'revoked',
     revoked_at = NOW()
 WHERE id = $1;
+
+-- name: RevokeAllActiveKeysForAgent :exec
+UPDATE agent_keys
+SET status     = 'revoked',
+    revoked_at = NOW()
+WHERE agent_id = $1
+  AND status = 'active';

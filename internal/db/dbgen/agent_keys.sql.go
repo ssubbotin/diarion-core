@@ -133,3 +133,16 @@ func (q *Queries) RevokeAgentKey(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, revokeAgentKey, id)
 	return err
 }
+
+const revokeAllActiveKeysForAgent = `-- name: RevokeAllActiveKeysForAgent :exec
+UPDATE agent_keys
+SET status     = 'revoked',
+    revoked_at = NOW()
+WHERE agent_id = $1
+  AND status = 'active'
+`
+
+func (q *Queries) RevokeAllActiveKeysForAgent(ctx context.Context, agentID int64) error {
+	_, err := q.db.Exec(ctx, revokeAllActiveKeysForAgent, agentID)
+	return err
+}
