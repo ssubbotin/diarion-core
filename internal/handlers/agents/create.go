@@ -133,12 +133,6 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, resp)
 }
 
-// List is a stub replaced by Task 6.
-func (h *Handlers) List(w http.ResponseWriter, _ *http.Request) { stub(w) }
-
-// Get is a stub replaced by Task 6.
-func (h *Handlers) Get(w http.ResponseWriter, _ *http.Request) { stub(w) }
-
 // Update is a stub replaced by Task 7.
 func (h *Handlers) Update(w http.ResponseWriter, _ *http.Request) { stub(w) }
 

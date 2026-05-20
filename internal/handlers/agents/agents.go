@@ -62,9 +62,7 @@ type agentResponse struct {
 //	a, ok := h.loadOwnedAgent(w, r)
 //	if !ok { return }
 //
-// Tasks 6-9 consume this helper; it is scaffolding until then.
-//
-//nolint:unused
+// Tasks 6-9 consume this helper.
 func (h *Handlers) loadOwnedAgent(w http.ResponseWriter, r *http.Request) (*dbgen.Agent, bool) {
 	u, ok := authmw.RequireUser(w, r)
 	if !ok {

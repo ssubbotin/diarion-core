@@ -252,3 +252,87 @@ func TestCreate_RequiresAuth(t *testing.T) {
 		t.Errorf("status = %d, want 401", resp.StatusCode)
 	}
 }
+
+func TestList_OnlyOwn(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	ctx := context.Background()
+
+	// Create one for our user via the API.
+	resp := doJSON(t, http.MethodPost, h.URL+"/api/v1/me/agents", h.Cookie,
+		map[string]any{"handle": "mine-1", "display_name": "Mine 1", "key_custody": "managed"})
+	resp.Body.Close()
+	resp2 := doJSON(t, http.MethodPost, h.URL+"/api/v1/me/agents", h.Cookie,
+		map[string]any{"handle": "mine-2", "display_name": "Mine 2", "key_custody": "managed"})
+	resp2.Body.Close()
+
+	// And one for a different user, directly via the DB.
+	other, _ := h.Queries.InsertUser(ctx, dbgen.InsertUserParams{
+		GoogleSub: "other-g", Email: "other@e.com", DisplayName: "Other",
+	})
+	_, _ = h.Queries.InsertAgent(ctx, dbgen.InsertAgentParams{
+		OwnerID: other.ID, Handle: "not-mine", DisplayName: "Not Mine", KeyCustody: "managed",
+	})
+
+	listResp := doJSON(t, http.MethodGet, h.URL+"/api/v1/me/agents", h.Cookie, nil)
+	defer listResp.Body.Close()
+	if listResp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d", listResp.StatusCode)
+	}
+	var items []map[string]any
+	if err := json.NewDecoder(listResp.Body).Decode(&items); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(items) != 2 {
+		t.Errorf("len(items) = %d, want 2", len(items))
+	}
+	for _, it := range items {
+		if it["handle"] == "not-mine" {
+			t.Errorf("list leaked another user's agent")
+		}
+	}
+}
+
+func TestGet_Owned(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	resp := doJSON(t, http.MethodPost, h.URL+"/api/v1/me/agents", h.Cookie,
+		map[string]any{"handle": "get-me", "display_name": "Get Me", "key_custody": "managed"})
+	resp.Body.Close()
+
+	getResp := doJSON(t, http.MethodGet, h.URL+"/api/v1/me/agents/get-me", h.Cookie, nil)
+	defer getResp.Body.Close()
+	if getResp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d", getResp.StatusCode)
+	}
+	var got map[string]any
+	_ = json.NewDecoder(getResp.Body).Decode(&got)
+	if got["handle"] != "get-me" {
+		t.Errorf("handle = %v", got["handle"])
+	}
+	if fp, _ := got["fingerprint"].(string); len(fp) != 64 {
+		t.Errorf("fingerprint = %q", fp)
+	}
+}
+
+func TestGet_NotOwned_Returns404(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	ctx := context.Background()
+
+	other, _ := h.Queries.InsertUser(ctx, dbgen.InsertUserParams{
+		GoogleSub: "other-g-2", Email: "other2@e.com", DisplayName: "Other2",
+	})
+	_, _ = h.Queries.InsertAgent(ctx, dbgen.InsertAgentParams{
+		OwnerID: other.ID, Handle: "not-mine-2", DisplayName: "Not Mine 2", KeyCustody: "managed",
+	})
+
+	resp := doJSON(t, http.MethodGet, h.URL+"/api/v1/me/agents/not-mine-2", h.Cookie, nil)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", resp.StatusCode)
+	}
+}
