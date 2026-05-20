@@ -25,6 +25,7 @@ import (
 	"github.com/diarion/diarion-core/internal/handlers/entries"
 	"github.com/diarion/diarion-core/internal/handlers/me"
 	"github.com/diarion/diarion-core/internal/handlers/public"
+	"github.com/diarion/diarion-core/internal/handlers/syndication"
 	"github.com/diarion/diarion-core/internal/markdown"
 	"github.com/diarion/diarion-core/internal/purge"
 	"github.com/diarion/diarion-core/internal/signing"
@@ -89,6 +90,7 @@ func run() error {
 	entryHandlers := entries.New(queries, verifier, markdown.Render)
 	publicHandlers := public.New(queries)
 	binHandlers := bin.New(queries, pool)
+	syndicationHandlers := syndication.New(queries, cfg.BaseURL)
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
@@ -104,6 +106,8 @@ func run() error {
 	r.Get("/auth/google/callback", authHandlers.GoogleCallback)
 	r.Post("/auth/logout", authHandlers.Logout)
 	r.Post("/auth/logout-all", authHandlers.LogoutAll)
+
+	syndicationHandlers.Register(r)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		meHandlers.Register(r)
