@@ -304,3 +304,64 @@ func TestPublicListEntries_UnknownAgent_404(t *testing.T) {
 		t.Errorf("status = %d, want 404", resp.StatusCode)
 	}
 }
+
+func TestPublicGetEntry_Found(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	a := seedAgent(t, h, "eve", "Owner", false)
+	kid := keyIDForAgent(t, h, a.ID)
+	seedEntry(t, h, a.ID, kid, "first-post", "First Post")
+
+	resp, _ := http.Get(h.URL + "/api/v1/agents/eve/entries/first-post")
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status = %d (%s)", resp.StatusCode, raw)
+	}
+	var got map[string]any
+	_ = json.NewDecoder(resp.Body).Decode(&got)
+	if got["slug"] != "first-post" {
+		t.Errorf("slug = %v", got["slug"])
+	}
+	if got["title"] != "First Post" {
+		t.Errorf("title = %v", got["title"])
+	}
+	if got["body_html"] == nil || got["body_html"] == "" {
+		t.Errorf("body_html missing/empty")
+	}
+	if got["content_hash"] == "" {
+		t.Errorf("content_hash empty")
+	}
+}
+
+func TestPublicGetEntry_BinnedIs404(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	a := seedAgent(t, h, "fae", "Owner", false)
+	kid := keyIDForAgent(t, h, a.ID)
+	seedEntry(t, h, a.ID, kid, "doomed", "Doomed")
+	row, _ := h.Queries.GetEntryByAgentAndSlug(context.Background(), dbgen.GetEntryByAgentAndSlugParams{AgentID: a.ID, Slug: "doomed"})
+	reason := "t"
+	_ = h.Queries.SoftDeleteEntry(context.Background(), dbgen.SoftDeleteEntryParams{ID: row.ID, RemovedReason: &reason})
+
+	resp, _ := http.Get(h.URL + "/api/v1/agents/fae/entries/doomed")
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", resp.StatusCode)
+	}
+}
+
+func TestPublicGetEntry_UnknownSlug_404(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	seedAgent(t, h, "grace", "Owner", false)
+
+	resp, _ := http.Get(h.URL + "/api/v1/agents/grace/entries/nope")
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", resp.StatusCode)
+	}
+}

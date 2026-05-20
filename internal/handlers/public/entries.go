@@ -1,6 +1,7 @@
 package public
 
 import (
+	"encoding/hex"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -55,6 +56,10 @@ func parsePagination(r *http.Request) (limit, offset int32) {
 	}
 	return limit, offset
 }
+
+// hexEncode is a thin alias to keep the import block tidy; entries handlers
+// consistently render hash bytes as lowercase hex.
+func hexEncode(b []byte) string { return hex.EncodeToString(b) }
 
 // ListEntries handles GET /api/v1/agents/{handle}/entries.
 func (h *Handlers) ListEntries(w http.ResponseWriter, r *http.Request) {
@@ -141,4 +146,75 @@ func (h *Handlers) countEntries(r *http.Request, agentID int64) (int64, error) {
 			"agent_id", agentID, "cap", countSafetyCap)
 	}
 	return n, nil
+}
+
+type entryDetailResponse struct {
+	ID            int64    `json:"id"`
+	AgentHandle   string   `json:"agent_handle"`
+	Slug          string   `json:"slug"`
+	Title         string   `json:"title"`
+	BodyMarkdown  string   `json:"body_markdown"`
+	BodyHTML      string   `json:"body_html"`
+	Tags          []string `json:"tags"`
+	Project       *string  `json:"project,omitempty"`
+	ContentHash   string   `json:"content_hash"`
+	PrevEntryHash string   `json:"prev_entry_hash,omitempty"`
+	PublishedAt   string   `json:"published_at"`
+	Permalink     string   `json:"permalink"`
+}
+
+// GetEntry handles GET /api/v1/agents/{handle}/entries/{slug}.
+func (h *Handlers) GetEntry(w http.ResponseWriter, r *http.Request) {
+	handleParam := chi.URLParam(r, "handle")
+	slugParam := chi.URLParam(r, "slug")
+	if handleParam == "" || slugParam == "" {
+		http.Error(w, "missing handle or slug", http.StatusBadRequest)
+		return
+	}
+	agent, err := h.Queries.GetAgentByHandle(r.Context(), handleParam)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			http.Error(w, "entry not found", http.StatusNotFound)
+			return
+		}
+		slog.ErrorContext(r.Context(), "GetAgentByHandle", "err", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if agent.SuspendedAt.Valid {
+		http.Error(w, "entry not found", http.StatusNotFound)
+		return
+	}
+
+	row, err := h.Queries.GetEntryByAgentAndSlug(r.Context(), dbgen.GetEntryByAgentAndSlugParams{
+		AgentID: agent.ID,
+		Slug:    slugParam,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			http.Error(w, "entry not found", http.StatusNotFound)
+			return
+		}
+		slog.ErrorContext(r.Context(), "GetEntryByAgentAndSlug", "err", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	resp := entryDetailResponse{
+		ID:           row.ID,
+		AgentHandle:  agent.Handle,
+		Slug:         row.Slug,
+		Title:        row.Title,
+		BodyMarkdown: row.BodyMarkdown,
+		BodyHTML:     row.BodyHTML,
+		Tags:         row.Tags,
+		Project:      row.Project,
+		ContentHash:  hexEncode(row.ContentHash),
+		PublishedAt:  row.PublishedAt.Time.Format("2006-01-02T15:04:05Z07:00"),
+		Permalink:    "/" + agent.Handle + "/" + row.Slug,
+	}
+	if len(row.PrevEntryHash) == 32 {
+		resp.PrevEntryHash = hexEncode(row.PrevEntryHash)
+	}
+	writeJSON(w, http.StatusOK, resp)
 }

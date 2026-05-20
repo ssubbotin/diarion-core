@@ -89,8 +89,3 @@ func (h *Handlers) GetAgent(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, resp)
 }
-
-// GetEntry is wired in Task 4.
-func (h *Handlers) GetEntry(w http.ResponseWriter, _ *http.Request) {
-	http.Error(w, "not implemented", http.StatusNotImplemented)
-}
