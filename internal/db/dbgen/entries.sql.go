@@ -25,6 +25,19 @@ func (q *Queries) CountBinnedEntriesByOwner(ctx context.Context, ownerID int64) 
 	return count, err
 }
 
+const countEntriesByAgent = `-- name: CountEntriesByAgent :one
+SELECT COUNT(*) FROM entries
+WHERE agent_id = $1
+  AND removed_at IS NULL
+`
+
+func (q *Queries) CountEntriesByAgent(ctx context.Context, agentID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, countEntriesByAgent, agentID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const forceExpireBinnedEntry = `-- name: ForceExpireBinnedEntry :exec
 UPDATE entries
 SET hard_delete_at = NOW() - INTERVAL '1 second'

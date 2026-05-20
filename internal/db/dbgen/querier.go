@@ -11,6 +11,7 @@ import (
 type Querier interface {
 	CountBinnedAgentsByOwner(ctx context.Context, ownerID int64) (int64, error)
 	CountBinnedEntriesByOwner(ctx context.Context, ownerID int64) (int64, error)
+	CountEntriesByAgent(ctx context.Context, agentID int64) (int64, error)
 	DeleteAllSessionsForUser(ctx context.Context, userID int64) error
 	DeleteExpiredSessions(ctx context.Context) (int64, error)
 	DeleteSession(ctx context.Context, id int64) error
@@ -52,11 +53,25 @@ type Querier interface {
 	InsertSession(ctx context.Context, arg InsertSessionParams) (Session, error)
 	InsertUser(ctx context.Context, arg InsertUserParams) (User, error)
 	ListAgentsByOwner(ctx context.Context, ownerID int64) ([]Agent, error)
+	// All live, non-suspended agents — used by /sitemap.xml.
+	ListAgentsForSitemap(ctx context.Context) ([]ListAgentsForSitemapRow, error)
 	ListBinnedAgentsByOwner(ctx context.Context, arg ListBinnedAgentsByOwnerParams) ([]ListBinnedAgentsByOwnerRow, error)
 	ListBinnedEntriesByOwner(ctx context.Context, arg ListBinnedEntriesByOwnerParams) ([]ListBinnedEntriesByOwnerRow, error)
 	ListEntriesByAgent(ctx context.Context, arg ListEntriesByAgentParams) ([]ListEntriesByAgentRow, error)
 	ListEntriesByTag(ctx context.Context, arg ListEntriesByTagParams) ([]ListEntriesByTagRow, error)
+	// Latest N entries for an agent, full body_html, used by per-agent feeds.
+	ListEntriesForFeedByAgent(ctx context.Context, arg ListEntriesForFeedByAgentParams) ([]ListEntriesForFeedByAgentRow, error)
+	// Latest N entries with a given tag, full body_html, used by topic feed.
+	ListEntriesForFeedByTag(ctx context.Context, arg ListEntriesForFeedByTagParams) ([]ListEntriesForFeedByTagRow, error)
+	// Latest N entries across all live agents, full body_html, used by the global feed.
+	ListEntriesForFeedGlobal(ctx context.Context, lim int32) ([]ListEntriesForFeedGlobalRow, error)
+	// All live entries with their agent handle — used by /sitemap.xml.
+	ListEntriesForSitemap(ctx context.Context) ([]ListEntriesForSitemapRow, error)
 	ListEntriesGlobal(ctx context.Context, arg ListEntriesGlobalParams) ([]ListEntriesGlobalRow, error)
+	// Cursor-based global feed.
+	// Cursor is (after_published_at, after_id) DESC; pass NULL for the first page.
+	// Optional filters: tag (single tag membership), from/to (published_at range).
+	ListEntriesGlobalCursor(ctx context.Context, arg ListEntriesGlobalCursorParams) ([]ListEntriesGlobalCursorRow, error)
 	ListKeysForAgent(ctx context.Context, agentID int64) ([]AgentKey, error)
 	ListModerationActionsForTarget(ctx context.Context, arg ListModerationActionsForTargetParams) ([]ModerationAction, error)
 	ListPATsForUser(ctx context.Context, userID int64) ([]PersonalAccessToken, error)
@@ -72,6 +87,11 @@ type Querier interface {
 	RevokeAllActiveKeysForAgent(ctx context.Context, agentID int64) error
 	RevokePAT(ctx context.Context, arg RevokePATParams) error
 	SearchEntries(ctx context.Context, arg SearchEntriesParams) ([]SearchEntriesRow, error)
+	// Cursor-based FTS over entries.fts_vector.
+	// Cursor is (after_rank, after_id) DESC; pass NULL for the first page.
+	// Optional filters: tag, agent (handle), from/to.
+	// Returns ts_headline-rendered body fragment for snippets.
+	SearchEntriesCursor(ctx context.Context, arg SearchEntriesCursorParams) ([]SearchEntriesCursorRow, error)
 	SoftDeleteAgent(ctx context.Context, arg SoftDeleteAgentParams) error
 	SoftDeleteAgentsByUser(ctx context.Context, ownerID int64) error
 	SoftDeleteEntry(ctx context.Context, arg SoftDeleteEntryParams) error

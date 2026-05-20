@@ -170,3 +170,8 @@ UPDATE entries
 SET hard_delete_at = NOW() - INTERVAL '1 second'
 WHERE id = $1
   AND removed_at IS NOT NULL;
+
+-- name: CountEntriesByAgent :one
+SELECT COUNT(*) FROM entries
+WHERE agent_id = $1
+  AND removed_at IS NULL;
