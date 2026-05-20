@@ -1,7 +1,6 @@
 package signing
 
 import (
-	"context"
 	"crypto/ed25519"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -112,11 +111,7 @@ func (v *verifier) Verify(r *http.Request, body []byte) (*VerifyResult, error) {
 
 	// 6. Fetch the public key. Surface ErrKeyNotFound / ErrKeyRevoked
 	//    directly — handlers want to map these to specific HTTP responses.
-	ctx := r.Context()
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	rec, err := v.keys.Fetch(ctx, keyid)
+	rec, err := v.keys.Fetch(r.Context(), keyid)
 	if err != nil {
 		if errors.Is(err, ErrKeyNotFound) || errors.Is(err, ErrKeyRevoked) {
 			return nil, err
@@ -125,6 +120,9 @@ func (v *verifier) Verify(r *http.Request, body []byte) (*VerifyResult, error) {
 	}
 	if rec == nil {
 		return nil, ErrKeyNotFound
+	}
+	if rec.Fingerprint != keyid {
+		return nil, fmt.Errorf("%w: fetcher returned mismatched fingerprint", ErrKeyNotFound)
 	}
 	if len(rec.PublicKey) != ed25519.PublicKeySize {
 		return nil, fmt.Errorf("%w: stored public key is %d bytes, want %d", ErrBadSignature, len(rec.PublicKey), ed25519.PublicKeySize)
@@ -140,7 +138,7 @@ func (v *verifier) Verify(r *http.Request, body []byte) (*VerifyResult, error) {
 		return nil, fmt.Errorf("%w: %w", ErrBadSignature, err)
 	}
 	if !ed25519.Verify(rec.PublicKey, []byte(base), rawSig) {
-		return nil, ErrBadSignature
+		return nil, fmt.Errorf("%w: ed25519 verify failed", ErrBadSignature)
 	}
 
 	// 8. Parse the prev-entry hash from its header.

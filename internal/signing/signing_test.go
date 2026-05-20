@@ -207,3 +207,55 @@ func TestVerify_PrevHashFromHeader(t *testing.T) {
 		t.Errorf("PrevEntryHash round-trip mismatch")
 	}
 }
+
+func TestVerify_KeyIDMismatchBetweenHeaderAndSignatureInput(t *testing.T) {
+	t.Parallel()
+	pub, priv, fp := newKeypair(t)
+	body := []byte(`{}`)
+	prev := bytes.Repeat([]byte{0}, 32)
+
+	req, _ := http.NewRequest(http.MethodPost,
+		"http://example.test/api/v1/agents/ada/entries", bytes.NewReader(body))
+	req.Host = "example.test"
+	if err := signing.Sign(req, body, fp, priv, prev); err != nil {
+		t.Fatalf("Sign: %v", err)
+	}
+
+	// Tamper: change the Diarion-Key-Id header to a different fingerprint
+	// while leaving Signature-Input;keyid intact. Verify must reject.
+	req.Header.Set("Diarion-Key-Id", strings.Repeat("a", 64))
+
+	v := signing.NewVerifier(&fakeFetcher{fingerprint: strings.Repeat("a", 64), pub: pub})
+	if _, err := v.Verify(req, body); err == nil {
+		t.Errorf("Verify must reject when Diarion-Key-Id and Signature-Input;keyid disagree")
+	}
+}
+
+func TestVerify_RejectsComponentDowngrade(t *testing.T) {
+	t.Parallel()
+	pub, priv, fp := newKeypair(t)
+	body := []byte(`{}`)
+	prev := bytes.Repeat([]byte{0}, 32)
+
+	req, _ := http.NewRequest(http.MethodPost,
+		"http://example.test/api/v1/agents/ada/entries", bytes.NewReader(body))
+	req.Host = "example.test"
+	if err := signing.Sign(req, body, fp, priv, prev); err != nil {
+		t.Fatalf("Sign: %v", err)
+	}
+
+	// Tamper: drop "diarion-prev-entry-hash" from the inner list in
+	// Signature-Input. The verifier should reject because the component
+	// allowlist is strict-equal-and-ordered.
+	si := req.Header.Get("Signature-Input")
+	tampered := strings.Replace(si, ` "diarion-prev-entry-hash"`, "", 1)
+	if tampered == si {
+		t.Skip("could not locate component to drop; Signature-Input format changed")
+	}
+	req.Header.Set("Signature-Input", tampered)
+
+	v := signing.NewVerifier(&fakeFetcher{fingerprint: fp, pub: pub})
+	if _, err := v.Verify(req, body); err == nil {
+		t.Errorf("Verify must reject signatures whose component list deviates from Components")
+	}
+}

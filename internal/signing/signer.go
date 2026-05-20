@@ -167,7 +167,7 @@ func componentValue(req *http.Request, name string) (string, error) {
 	case "@method":
 		return strings.ToUpper(req.Method), nil
 	case "@authority":
-		return req.Host, nil
+		return strings.ToLower(req.Host), nil
 	case "@path":
 		p := req.URL.Path
 		if p == "" {
