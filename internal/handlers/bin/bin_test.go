@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"testing"
 	"time"
 
@@ -80,7 +81,7 @@ func setupHarness(t *testing.T) *harness {
 	verifier := signing.NewVerifier(signing.NewDBKeyFetcher(q))
 	agentH := agents.New(q, master)
 	entH := entries.New(q, verifier, markdown.Render)
-	binHandlers := binh.New(q)
+	binHandlers := binh.New(q, pool)
 
 	r := chi.NewRouter()
 	r.Use(authmw.Middleware(q, mgr))
@@ -297,3 +298,124 @@ func TestBinListEntries_DoesNotLeakOtherUsers(t *testing.T) {
 		t.Errorf("second user must not see first's bin; got %d items", len(items))
 	}
 }
+
+func TestBinRestoreEntry(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	handle, priv, fp := createSelfAgent(t, h, "rst1")
+	id, slug := publishAndDelete(t, h, handle, fp, priv, bytes.Repeat([]byte{0}, 32))
+
+	req, _ := http.NewRequest(http.MethodPost,
+		h.URL+"/api/v1/me/bin/entries/"+intStr(id)+"/restore", nil)
+	req.AddCookie(h.Cookie)
+	resp, _ := http.DefaultClient.Do(req)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("restore = %d", resp.StatusCode)
+	}
+
+	// Public read still 404s (public.Handlers not mounted in this harness);
+	// instead verify directly via the DB that the row is restored.
+	row, err := h.Queries.GetEntryByID(context.Background(), id)
+	if err != nil {
+		t.Fatalf("GetEntryByID: %v", err)
+	}
+	if row.RemovedAt.Valid {
+		t.Errorf("entry should be restored; removed_at still set")
+	}
+	_ = slug
+}
+
+func TestBinPurgeEntry(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	handle, priv, fp := createSelfAgent(t, h, "purge1")
+	id, _ := publishAndDelete(t, h, handle, fp, priv, bytes.Repeat([]byte{0}, 32))
+
+	req, _ := http.NewRequest(http.MethodDelete,
+		h.URL+"/api/v1/me/bin/entries/"+intStr(id), nil)
+	req.AddCookie(h.Cookie)
+	resp, _ := http.DefaultClient.Do(req)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("purge = %d", resp.StatusCode)
+	}
+
+	// Row is gone — direct DB check.
+	_, err := h.Queries.GetEntryByID(context.Background(), id)
+	if err == nil {
+		t.Errorf("entry %d should be hard-deleted", id)
+	}
+}
+
+func TestBinPurgeAgentCascades(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	handle, priv, fp := createSelfAgent(t, h, "purge-a-1")
+
+	// Publish an entry, leave it live, delete the agent (soft).
+	body := []byte(`{"title":"t","body_markdown":"# t"}`)
+	u, _ := url.Parse(h.URL + "/api/v1/agents/" + handle + "/entries")
+	req, _ := http.NewRequest(http.MethodPost, u.String(), bytes.NewReader(body))
+	req.Host = u.Host
+	req.Header.Set("Content-Type", "application/json")
+	_ = signing.Sign(req, body, fp, priv, bytes.Repeat([]byte{0}, 32))
+	pr, _ := http.DefaultClient.Do(req)
+	var p map[string]any
+	_ = json.NewDecoder(pr.Body).Decode(&p)
+	pr.Body.Close()
+	entryID := int64(p["id"].(float64))
+
+	a, _ := h.Queries.GetAgentByHandle(context.Background(), handle)
+	agentID := a.ID
+
+	req, _ = http.NewRequest(http.MethodDelete, h.URL+"/api/v1/me/agents/"+handle, nil)
+	req.AddCookie(h.Cookie)
+	dresp, _ := http.DefaultClient.Do(req)
+	dresp.Body.Close()
+
+	req, _ = http.NewRequest(http.MethodDelete,
+		h.URL+"/api/v1/me/bin/agents/"+intStr(agentID), nil)
+	req.AddCookie(h.Cookie)
+	presp, _ := http.DefaultClient.Do(req)
+	presp.Body.Close()
+	if presp.StatusCode != http.StatusNoContent {
+		t.Fatalf("purge agent = %d", presp.StatusCode)
+	}
+
+	if _, err := h.Queries.GetAgentByIDAny(context.Background(), agentID); err == nil {
+		t.Errorf("agent should be hard-deleted")
+	}
+	if _, err := h.Queries.GetEntryByID(context.Background(), entryID); err == nil {
+		t.Errorf("entry %d should be cascaded-deleted with agent", entryID)
+	}
+}
+
+func TestBinRestoreEntry_OtherUser_404(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	handle, priv, fp := createSelfAgent(t, h, "rst-x")
+	id, _ := publishAndDelete(t, h, handle, fp, priv, bytes.Repeat([]byte{0}, 32))
+
+	ctx := context.Background()
+	u2, _ := h.Queries.InsertUser(ctx, dbgen.InsertUserParams{GoogleSub: "rst-other", Email: "ro@e.com", DisplayName: "RO"})
+	mgr := session.NewManager(h.Queries, false)
+	rec := httptest.NewRecorder()
+	_, _ = mgr.Issue(ctx, rec, u2.ID)
+	c2 := rec.Result().Cookies()[0]
+
+	req, _ := http.NewRequest(http.MethodPost,
+		h.URL+"/api/v1/me/bin/entries/"+intStr(id)+"/restore", nil)
+	req.AddCookie(c2)
+	resp, _ := http.DefaultClient.Do(req)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("restore by stranger = %d, want 404", resp.StatusCode)
+	}
+}
+
+func intStr(n int64) string { return strconv.FormatInt(n, 10) }

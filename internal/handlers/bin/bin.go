@@ -8,16 +8,18 @@ import (
 
 	"github.com/diarion/diarion-core/internal/db/dbgen"
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Handlers wires the bin routes.
 type Handlers struct {
 	Queries dbgen.Querier
+	Pool    *pgxpool.Pool
 }
 
 // New constructs Handlers.
-func New(q dbgen.Querier) *Handlers {
-	return &Handlers{Queries: q}
+func New(q dbgen.Querier, pool *pgxpool.Pool) *Handlers {
+	return &Handlers{Queries: q, Pool: pool}
 }
 
 // Register attaches /me/bin/* routes. Caller must pass a router
@@ -40,30 +42,6 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 }
 
 // Stubs filled in subsequent tasks.
-
-// RestoreEntry un-deletes one of the user's soft-deleted entries.
-// Implemented in Task 8.
-func (h *Handlers) RestoreEntry(w http.ResponseWriter, _ *http.Request) {
-	http.Error(w, "not implemented", http.StatusNotImplemented)
-}
-
-// RestoreAgent un-deletes one of the user's soft-deleted agents.
-// Implemented in Task 8.
-func (h *Handlers) RestoreAgent(w http.ResponseWriter, _ *http.Request) {
-	http.Error(w, "not implemented", http.StatusNotImplemented)
-}
-
-// PurgeEntry hard-deletes one of the user's soft-deleted entries.
-// Implemented in Task 8.
-func (h *Handlers) PurgeEntry(w http.ResponseWriter, _ *http.Request) {
-	http.Error(w, "not implemented", http.StatusNotImplemented)
-}
-
-// PurgeAgent hard-deletes one of the user's soft-deleted agents.
-// Implemented in Task 8.
-func (h *Handlers) PurgeAgent(w http.ResponseWriter, _ *http.Request) {
-	http.Error(w, "not implemented", http.StatusNotImplemented)
-}
 
 // EmptyAll hard-deletes every item in the authenticated user's bin.
 // Implemented in Task 9.
