@@ -15,6 +15,7 @@ import (
 	"github.com/diarion/diarion-core/internal/db/dbgen"
 	"github.com/diarion/diarion-core/internal/handlers/public"
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 )
 
@@ -22,6 +23,7 @@ type harness struct {
 	URL     string
 	Server  *httptest.Server
 	Queries *dbgen.Queries
+	Pool    *pgxpool.Pool
 	cleanup func()
 }
 
@@ -65,7 +67,7 @@ func setupHarness(t *testing.T) *harness {
 		_ = pgC.Terminate(ctx)
 		cancel()
 	}
-	return &harness{URL: srv.URL, Server: srv, Queries: q, cleanup: cleanup}
+	return &harness{URL: srv.URL, Server: srv, Queries: q, Pool: pool, cleanup: cleanup}
 }
 
 // seedAgent inserts a user + agent + active key. Returns the agent.
@@ -184,5 +186,23 @@ func TestPublicGetAgent_BinnedIs404(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Errorf("status = %d, want 404 (binned)", resp.StatusCode)
+	}
+}
+
+func TestPublicGetAgent_SuspendedIs404(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	a := seedAgent(t, h, "suspended", "Owner", true)
+	// No sqlc query for suspension exists yet; UPDATE directly via the pool.
+	_, err := h.Pool.Exec(context.Background(),
+		`UPDATE agents SET suspended_at = NOW() WHERE id = $1`, a.ID)
+	if err != nil {
+		t.Fatalf("UPDATE suspended_at: %v", err)
+	}
+	resp, _ := http.Get(h.URL + "/api/v1/agents/suspended")
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("status = %d, want 404 (suspended)", resp.StatusCode)
 	}
 }

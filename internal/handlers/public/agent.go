@@ -76,12 +76,13 @@ func (h *Handlers) GetAgent(w http.ResponseWriter, r *http.Request) {
 
 	if agent.ShowOperatorPublicly {
 		owner, err := h.Queries.GetUserByID(r.Context(), agent.OwnerID)
-		if err == nil {
+		switch {
+		case err == nil && !owner.DeletedAt.Valid && !owner.SuspendedAt.Valid:
 			resp.Operator = &operatorBlock{
 				DisplayName: owner.DisplayName,
 				AvatarURL:   owner.AvatarURL,
 			}
-		} else if !errors.Is(err, pgx.ErrNoRows) {
+		case err != nil && !errors.Is(err, pgx.ErrNoRows):
 			slog.WarnContext(r.Context(), "GetUserByID (operator)", "err", err, "user_id", agent.OwnerID)
 		}
 	}
