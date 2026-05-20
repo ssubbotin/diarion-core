@@ -93,10 +93,15 @@ func seedAgent(t *testing.T, h *harness, handle string, ownerName string, show b
 		t.Fatalf("InsertAgent: %v", err)
 	}
 	// Key isn't required for /agents/{handle} but the response includes
-	// fingerprint when present, so seed one.
+	// fingerprint when present, so seed one. Derive bytes from handle so
+	// multiple agents in the same harness don't collide on the UNIQUE
+	// public_key constraint.
 	pub := make([]byte, 32)
 	for i := range pub {
 		pub[i] = byte(i + 1)
+	}
+	for i := 0; i < len(handle) && i < 32; i++ {
+		pub[i] ^= handle[i]
 	}
 	_, err = h.Queries.InsertAgentKey(ctx, dbgen.InsertAgentKeyParams{
 		AgentID:     a.ID,
@@ -501,5 +506,141 @@ func TestPublicListGlobalEntries_OmitsBinnedAgent(t *testing.T) {
 		if m["agent_handle"] == "ghost-feed" {
 			t.Errorf("global feed leaked binned agent's entry")
 		}
+	}
+}
+
+func TestPublicSearch_BasicMatch(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	a := seedAgent(t, h, "search1", "Owner", false)
+	kid := keyIDForAgent(t, h, a.ID)
+	sig := make([]byte, 64)
+	hash := make([]byte, 32)
+	_, _ = h.Queries.InsertEntry(context.Background(), dbgen.InsertEntryParams{
+		AgentID: a.ID, SigningKeyID: kid, Slug: "rust", Title: "Building with Rust",
+		BodyMarkdown: "Rust ownership rules are subtle but powerful.",
+		BodyHTML:     "<p>Rust ownership rules are subtle but powerful.</p>",
+		Tags:         []string{"rust"}, Frontmatter: []byte("{}"),
+		Signature: sig, ContentHash: hash,
+	})
+	_, _ = h.Queries.InsertEntry(context.Background(), dbgen.InsertEntryParams{
+		AgentID: a.ID, SigningKeyID: kid, Slug: "go", Title: "Building with Go",
+		BodyMarkdown: "Go interfaces are structural.",
+		BodyHTML:     "<p>Go interfaces are structural.</p>",
+		Tags:         []string{"go"}, Frontmatter: []byte("{}"),
+		Signature: sig, ContentHash: hash,
+	})
+
+	resp, _ := http.Get(h.URL + "/api/v1/search?q=ownership")
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status = %d (%s)", resp.StatusCode, raw)
+	}
+	var got map[string]any
+	_ = json.NewDecoder(resp.Body).Decode(&got)
+	items, _ := got["results"].([]any)
+	if len(items) != 1 {
+		t.Fatalf("len(results) = %d, want 1 (only Rust matches)", len(items))
+	}
+	first := items[0].(map[string]any)
+	if first["slug"] != "rust" {
+		t.Errorf("slug = %v, want rust", first["slug"])
+	}
+	if first["headline"] == nil || first["headline"] == "" {
+		t.Errorf("headline missing")
+	}
+}
+
+func TestPublicSearch_RequiresQuery(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	resp, _ := http.Get(h.URL + "/api/v1/search")
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400 (missing q)", resp.StatusCode)
+	}
+}
+
+func TestPublicSearch_AgentFilter(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	a1 := seedAgent(t, h, "search-a", "Owner1", false)
+	a2 := seedAgent(t, h, "search-b", "Owner2", false)
+	k1 := keyIDForAgent(t, h, a1.ID)
+	k2 := keyIDForAgent(t, h, a2.ID)
+	sig := make([]byte, 64)
+	hash := make([]byte, 32)
+	_, _ = h.Queries.InsertEntry(context.Background(), dbgen.InsertEntryParams{
+		AgentID: a1.ID, SigningKeyID: k1, Slug: "x", Title: "shared topic",
+		BodyMarkdown: "shared", BodyHTML: "<p>shared</p>", Tags: []string{},
+		Frontmatter: []byte("{}"), Signature: sig, ContentHash: hash,
+	})
+	_, _ = h.Queries.InsertEntry(context.Background(), dbgen.InsertEntryParams{
+		AgentID: a2.ID, SigningKeyID: k2, Slug: "y", Title: "shared again",
+		BodyMarkdown: "shared", BodyHTML: "<p>shared</p>", Tags: []string{},
+		Frontmatter: []byte("{}"), Signature: sig, ContentHash: hash,
+	})
+
+	resp, _ := http.Get(h.URL + "/api/v1/search?q=shared&agent=search-a")
+	defer resp.Body.Close()
+	var got map[string]any
+	_ = json.NewDecoder(resp.Body).Decode(&got)
+	items, _ := got["results"].([]any)
+	if len(items) != 1 {
+		t.Fatalf("expected 1 result (filtered); got %d", len(items))
+	}
+	first := items[0].(map[string]any)
+	if first["agent_handle"] != "search-a" {
+		t.Errorf("agent_handle = %v", first["agent_handle"])
+	}
+}
+
+func TestPublicSearch_CursorPagination(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	a := seedAgent(t, h, "search-cur", "Owner", false)
+	kid := keyIDForAgent(t, h, a.ID)
+	sig := make([]byte, 64)
+	hash := make([]byte, 32)
+	for i := 0; i < 4; i++ {
+		_, _ = h.Queries.InsertEntry(context.Background(), dbgen.InsertEntryParams{
+			AgentID: a.ID, SigningKeyID: kid,
+			Slug:         "doc-" + string(rune('a'+i)),
+			Title:        "Document " + string(rune('A'+i)),
+			BodyMarkdown: "common keyword in body " + string(rune('A'+i)),
+			BodyHTML:     "<p>common keyword</p>",
+			Tags:         []string{}, Frontmatter: []byte("{}"),
+			Signature: sig, ContentHash: hash,
+		})
+	}
+
+	resp, _ := http.Get(h.URL + "/api/v1/search?q=keyword&limit=2")
+	defer resp.Body.Close()
+	var p1 map[string]any
+	_ = json.NewDecoder(resp.Body).Decode(&p1)
+	items1, _ := p1["results"].([]any)
+	if len(items1) != 2 {
+		t.Fatalf("page1 len = %d", len(items1))
+	}
+	cur, _ := p1["next_cursor"].(string)
+	if cur == "" {
+		t.Fatalf("missing next_cursor for paginated search")
+	}
+
+	resp2, _ := http.Get(h.URL + "/api/v1/search?q=keyword&limit=2&after=" + cur)
+	defer resp2.Body.Close()
+	var p2 map[string]any
+	_ = json.NewDecoder(resp2.Body).Decode(&p2)
+	items2, _ := p2["results"].([]any)
+	if len(items2) == 0 {
+		t.Errorf("page2 empty")
+	}
+	if items1[0].(map[string]any)["id"] == items2[0].(map[string]any)["id"] {
+		t.Errorf("search cursor failed to advance")
 	}
 }
