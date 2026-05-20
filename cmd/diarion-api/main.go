@@ -21,7 +21,10 @@ import (
 	"github.com/diarion/diarion-core/internal/db/dbgen"
 	"github.com/diarion/diarion-core/internal/handlers/agents"
 	"github.com/diarion/diarion-core/internal/handlers/auth"
+	"github.com/diarion/diarion-core/internal/handlers/entries"
 	"github.com/diarion/diarion-core/internal/handlers/me"
+	"github.com/diarion/diarion-core/internal/markdown"
+	"github.com/diarion/diarion-core/internal/signing"
 	authmw "github.com/diarion/diarion-core/internal/middleware/auth"
 	diarionredis "github.com/diarion/diarion-core/internal/store/redis"
 	"github.com/go-chi/chi/v5"
@@ -79,6 +82,9 @@ func run() error {
 	meHandlers := me.New(queries)
 	agentHandlers := agents.New(queries, cfg.DiarionMasterKey)
 
+	verifier := signing.NewVerifier(signing.NewDBKeyFetcher(queries))
+	entryHandlers := entries.New(queries, verifier, markdown.Render)
+
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
@@ -100,6 +106,7 @@ func run() error {
 		r.Get("/me/tokens", meHandlers.ListTokens)
 		r.Delete("/me/tokens/{id}", meHandlers.RevokeToken)
 		agentHandlers.Register(r)
+		entryHandlers.Register(r)
 	})
 
 	srv := &http.Server{
