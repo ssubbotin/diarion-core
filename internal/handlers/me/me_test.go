@@ -59,7 +59,7 @@ func setupServer(t *testing.T) (string, *dbgen.Queries, func(), *http.Cookie, in
 
 	r := chi.NewRouter()
 	r.Use(authmw.Middleware(q, mgr))
-	h := me.New(q, mgr)
+	h := me.New(q, mgr, pool)
 	r.Route("/api/v1", func(r chi.Router) {
 		h.Register(r)
 	})

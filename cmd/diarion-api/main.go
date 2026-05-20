@@ -82,7 +82,7 @@ func run() error {
 	)
 
 	authHandlers := auth.New(provider, sessions, queries, rClient)
-	meHandlers := me.New(queries, sessions)
+	meHandlers := me.New(queries, sessions, pool)
 	agentHandlers := agents.New(queries, cfg.DiarionMasterKey)
 
 	verifier := signing.NewVerifier(signing.NewDBKeyFetcher(queries))

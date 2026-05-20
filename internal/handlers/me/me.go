@@ -9,17 +9,19 @@ import (
 	"github.com/diarion/diarion-core/internal/db/dbgen"
 	authmw "github.com/diarion/diarion-core/internal/middleware/auth"
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Handlers carries dependencies for the /me routes.
 type Handlers struct {
 	Queries  dbgen.Querier
 	Sessions *session.Manager
+	Pool     *pgxpool.Pool
 }
 
 // New constructs Handlers.
-func New(q dbgen.Querier, s *session.Manager) *Handlers {
-	return &Handlers{Queries: q, Sessions: s}
+func New(q dbgen.Querier, s *session.Manager, pool *pgxpool.Pool) *Handlers {
+	return &Handlers{Queries: q, Sessions: s, Pool: pool}
 }
 
 // Register attaches /me + /me/tokens routes. Caller must pass a router
