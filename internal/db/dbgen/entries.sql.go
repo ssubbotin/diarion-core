@@ -25,6 +25,18 @@ func (q *Queries) CountBinnedEntriesByOwner(ctx context.Context, ownerID int64) 
 	return count, err
 }
 
+const forceExpireBinnedEntry = `-- name: ForceExpireBinnedEntry :exec
+UPDATE entries
+SET hard_delete_at = NOW() - INTERVAL '1 second'
+WHERE id = $1
+  AND removed_at IS NOT NULL
+`
+
+func (q *Queries) ForceExpireBinnedEntry(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, forceExpireBinnedEntry, id)
+	return err
+}
+
 const getEntryByAgentAndSlug = `-- name: GetEntryByAgentAndSlug :one
 SELECT id, agent_id, signing_key_id, slug, title,
        body_markdown, body_html, tags, project,

@@ -14,6 +14,9 @@ type Querier interface {
 	DeleteAllSessionsForUser(ctx context.Context, userID int64) error
 	DeleteExpiredSessions(ctx context.Context) (int64, error)
 	DeleteSession(ctx context.Context, id int64) error
+	ForceExpireBinnedAgent(ctx context.Context, id int64) error
+	ForceExpireBinnedEntry(ctx context.Context, id int64) error
+	ForceExpireBinnedUser(ctx context.Context, id int64) error
 	GetActiveKeyForAgent(ctx context.Context, agentID int64) (AgentKey, error)
 	GetAgentByHandle(ctx context.Context, lower string) (Agent, error)
 	GetAgentByID(ctx context.Context, id int64) (Agent, error)

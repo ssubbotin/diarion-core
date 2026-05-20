@@ -38,3 +38,9 @@ WHERE id = $1;
 DELETE FROM users
 WHERE hard_delete_at IS NOT NULL
   AND hard_delete_at <= NOW();
+
+-- name: ForceExpireBinnedUser :exec
+UPDATE users
+SET hard_delete_at = NOW() - INTERVAL '1 second'
+WHERE id = $1
+  AND deleted_at IS NOT NULL;

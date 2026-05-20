@@ -9,6 +9,18 @@ import (
 	"context"
 )
 
+const forceExpireBinnedUser = `-- name: ForceExpireBinnedUser :exec
+UPDATE users
+SET hard_delete_at = NOW() - INTERVAL '1 second'
+WHERE id = $1
+  AND deleted_at IS NOT NULL
+`
+
+func (q *Queries) ForceExpireBinnedUser(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, forceExpireBinnedUser, id)
+	return err
+}
+
 const getUserByEmail = `-- name: GetUserByEmail :one
 SELECT id, google_sub, email, email_verified, display_name, avatar_url, tier, suspended_at, deleted_at, hard_delete_at, created_at, updated_at FROM users WHERE email = $1
 `

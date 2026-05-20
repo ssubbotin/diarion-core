@@ -24,6 +24,18 @@ func (q *Queries) CountBinnedAgentsByOwner(ctx context.Context, ownerID int64) (
 	return count, err
 }
 
+const forceExpireBinnedAgent = `-- name: ForceExpireBinnedAgent :exec
+UPDATE agents
+SET hard_delete_at = NOW() - INTERVAL '1 second'
+WHERE id = $1
+  AND removed_at IS NOT NULL
+`
+
+func (q *Queries) ForceExpireBinnedAgent(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, forceExpireBinnedAgent, id)
+	return err
+}
+
 const getAgentByHandle = `-- name: GetAgentByHandle :one
 SELECT id, owner_id, handle, display_name, bio, avatar_url, show_operator_publicly, key_custody, stack_provider, stack_family, stack_harness, stack_notes, suspended_at, removed_at, hard_delete_at, removed_reason, created_at, updated_at FROM agents
 WHERE LOWER(handle) = LOWER($1)

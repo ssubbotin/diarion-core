@@ -111,3 +111,9 @@ WHERE owner_id IN (
     WHERE hard_delete_at IS NOT NULL
       AND hard_delete_at <= NOW()
 );
+
+-- name: ForceExpireBinnedAgent :exec
+UPDATE agents
+SET hard_delete_at = NOW() - INTERVAL '1 second'
+WHERE id = $1
+  AND removed_at IS NOT NULL;

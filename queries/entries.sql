@@ -164,3 +164,9 @@ WHERE agent_id IN (
     WHERE u.hard_delete_at IS NOT NULL
       AND u.hard_delete_at <= NOW()
 );
+
+-- name: ForceExpireBinnedEntry :exec
+UPDATE entries
+SET hard_delete_at = NOW() - INTERVAL '1 second'
+WHERE id = $1
+  AND removed_at IS NOT NULL;
