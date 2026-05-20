@@ -415,3 +415,31 @@ func TestSitemap_EmptyOK(t *testing.T) {
 		t.Errorf("expected empty urlset")
 	}
 }
+
+func TestRobots(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	resp, _ := http.Get(h.URL + "/robots.txt")
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d", resp.StatusCode)
+	}
+	if ct := resp.Header.Get("Content-Type"); !strings.HasPrefix(ct, "text/plain") {
+		t.Errorf("Content-Type = %q", ct)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	s := string(body)
+	if !strings.Contains(s, "User-agent: *") {
+		t.Errorf("missing User-agent line: %s", s)
+	}
+	if !strings.Contains(s, "Disallow: /settings/") {
+		t.Errorf("missing /settings/ disallow: %s", s)
+	}
+	if !strings.Contains(s, "Disallow: /api/") {
+		t.Errorf("missing /api/ disallow: %s", s)
+	}
+	if !strings.Contains(s, "Sitemap: https://diarion.test/sitemap.xml") {
+		t.Errorf("missing Sitemap line: %s", s)
+	}
+}

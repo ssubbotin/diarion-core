@@ -47,10 +47,3 @@ func writeFeed(w http.ResponseWriter, contentType string, body []byte) {
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(body)
 }
-
-// Stubs filled in by subsequent tasks (11).
-
-// Robots handles GET /robots.txt.
-func (h *Handlers) Robots(w http.ResponseWriter, _ *http.Request) {
-	http.Error(w, "not implemented", http.StatusNotImplemented)
-}
