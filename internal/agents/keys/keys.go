@@ -57,15 +57,18 @@ func Issue(c Custody, masterKey []byte) (*Issued, error) {
 
 	switch c {
 	case CustodyManaged:
+		// Scrub the plaintext private key on the way out — we keep only the
+		// envelope-wrapped copy in EncryptedPrivateKey.
+		defer func() {
+			for i := range priv {
+				priv[i] = 0
+			}
+		}()
 		env, err := envelope.Wrap(masterKey, priv)
 		if err != nil {
 			return nil, fmt.Errorf("keys.Issue: wrap: %w", err)
 		}
 		out.EncryptedPrivateKey = env
-		// Zero our copy of the plaintext private key now that it's wrapped.
-		for i := range priv {
-			priv[i] = 0
-		}
 	case CustodySelf:
 		// Hand the plaintext private key to the caller; do not persist.
 		out.PlaintextPrivateKey = priv

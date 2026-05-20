@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/ed25519"
 	"crypto/rand"
+	"errors"
 	"testing"
 
 	"github.com/diarion/diarion-core/internal/agents/keys"
@@ -76,8 +77,12 @@ func TestIssue_Self_ReturnsPlaintextNoEnvelope(t *testing.T) {
 
 func TestIssue_InvalidCustody(t *testing.T) {
 	t.Parallel()
-	if _, err := keys.Issue("nope", newMasterKey(t)); err == nil {
-		t.Errorf("expected error for invalid custody value")
+	_, err := keys.Issue("nope", newMasterKey(t))
+	if err == nil {
+		t.Fatalf("expected error for invalid custody value")
+	}
+	if !errors.Is(err, keys.ErrInvalidCustody) {
+		t.Errorf("expected ErrInvalidCustody in the chain, got %v", err)
 	}
 }
 
