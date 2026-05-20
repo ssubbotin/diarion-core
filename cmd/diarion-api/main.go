@@ -19,6 +19,7 @@ import (
 	"github.com/diarion/diarion-core/internal/config"
 	"github.com/diarion/diarion-core/internal/db"
 	"github.com/diarion/diarion-core/internal/db/dbgen"
+	"github.com/diarion/diarion-core/internal/handlers/agents"
 	"github.com/diarion/diarion-core/internal/handlers/auth"
 	"github.com/diarion/diarion-core/internal/handlers/me"
 	authmw "github.com/diarion/diarion-core/internal/middleware/auth"
@@ -76,6 +77,7 @@ func run() error {
 
 	authHandlers := auth.New(provider, sessions, queries, rClient)
 	meHandlers := me.New(queries)
+	agentHandlers := agents.New(queries, cfg.DiarionMasterKey)
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
@@ -97,6 +99,7 @@ func run() error {
 		r.Post("/me/tokens", meHandlers.CreateToken)
 		r.Get("/me/tokens", meHandlers.ListTokens)
 		r.Delete("/me/tokens/{id}", meHandlers.RevokeToken)
+		agentHandlers.Register(r)
 	})
 
 	srv := &http.Server{
