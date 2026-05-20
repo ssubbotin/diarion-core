@@ -603,3 +603,96 @@ func TestRevokeKey_NotOwned_Returns404(t *testing.T) {
 		t.Errorf("status = %d, want 404", resp.StatusCode)
 	}
 }
+
+func TestSwitchCustody_ManagedToSelf(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	ctx := context.Background()
+
+	createResp := doJSON(t, http.MethodPost, h.URL+"/api/v1/me/agents", h.Cookie,
+		map[string]any{"handle": "swap-1", "display_name": "Swap1", "key_custody": "managed"})
+	createResp.Body.Close()
+
+	swResp := doJSON(t, http.MethodPost, h.URL+"/api/v1/me/agents/swap-1/custody/switch", h.Cookie,
+		map[string]any{"to": "self"})
+	defer swResp.Body.Close()
+	if swResp.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(swResp.Body)
+		t.Fatalf("status = %d (%s)", swResp.StatusCode, string(raw))
+	}
+	var got map[string]any
+	_ = json.NewDecoder(swResp.Body).Decode(&got)
+	if got["key_custody"] != "self" {
+		t.Errorf("key_custody = %v", got["key_custody"])
+	}
+	priv, _ := got["private_key"].(string)
+	if priv == "" {
+		t.Fatalf("managed→self switch must return private_key")
+	}
+	decoded, _ := hex.DecodeString(priv)
+	if len(decoded) != ed25519.PrivateKeySize {
+		t.Errorf("private_key len = %d", len(decoded))
+	}
+
+	agent, _ := h.Queries.GetAgentByHandle(ctx, "swap-1")
+	if agent.KeyCustody != "self" {
+		t.Errorf("DB custody = %q", agent.KeyCustody)
+	}
+	active, _ := h.Queries.GetActiveKeyForAgent(ctx, agent.ID)
+	if active.EncryptedPrivateKey != nil {
+		t.Errorf("self mode must not store encrypted privkey")
+	}
+}
+
+func TestSwitchCustody_SelfToManaged(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	ctx := context.Background()
+
+	createResp := doJSON(t, http.MethodPost, h.URL+"/api/v1/me/agents", h.Cookie,
+		map[string]any{"handle": "swap-2", "display_name": "Swap2", "key_custody": "self"})
+	createResp.Body.Close()
+
+	swResp := doJSON(t, http.MethodPost, h.URL+"/api/v1/me/agents/swap-2/custody/switch", h.Cookie,
+		map[string]any{"to": "managed"})
+	defer swResp.Body.Close()
+	if swResp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d", swResp.StatusCode)
+	}
+	var got map[string]any
+	_ = json.NewDecoder(swResp.Body).Decode(&got)
+	if got["key_custody"] != "managed" {
+		t.Errorf("key_custody = %v", got["key_custody"])
+	}
+	if _, has := got["private_key"]; has {
+		t.Errorf("self→managed switch must NOT return private_key")
+	}
+
+	agent, _ := h.Queries.GetAgentByHandle(ctx, "swap-2")
+	if agent.KeyCustody != "managed" {
+		t.Errorf("DB custody = %q", agent.KeyCustody)
+	}
+	active, _ := h.Queries.GetActiveKeyForAgent(ctx, agent.ID)
+	if active.EncryptedPrivateKey == nil {
+		t.Errorf("managed mode must store encrypted privkey")
+	}
+}
+
+func TestSwitchCustody_RejectsSameMode(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+
+	resp := doJSON(t, http.MethodPost, h.URL+"/api/v1/me/agents", h.Cookie,
+		map[string]any{"handle": "no-swap", "display_name": "NoSwap", "key_custody": "managed"})
+	resp.Body.Close()
+
+	swResp := doJSON(t, http.MethodPost, h.URL+"/api/v1/me/agents/no-swap/custody/switch", h.Cookie,
+		map[string]any{"to": "managed"})
+	defer swResp.Body.Close()
+	if swResp.StatusCode != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", swResp.StatusCode)
+	}
+}

@@ -133,7 +133,3 @@ func (h *Handlers) Create(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, resp)
 }
 
-// SwitchCustody is a stub replaced by Task 9.
-func (h *Handlers) SwitchCustody(w http.ResponseWriter, _ *http.Request) { stub(w) }
-
-func stub(w http.ResponseWriter) { http.Error(w, "not implemented", http.StatusNotImplemented) }
