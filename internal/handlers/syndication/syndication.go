@@ -48,22 +48,7 @@ func writeFeed(w http.ResponseWriter, contentType string, body []byte) {
 	_, _ = w.Write(body)
 }
 
-// Stubs filled in by subsequent tasks (8, 9, 10, 11).
-
-// GlobalFeedRSS handles GET /feed.xml.
-func (h *Handlers) GlobalFeedRSS(w http.ResponseWriter, _ *http.Request) {
-	http.Error(w, "not implemented", http.StatusNotImplemented)
-}
-
-// GlobalFeedAtom handles GET /feed.atom.
-func (h *Handlers) GlobalFeedAtom(w http.ResponseWriter, _ *http.Request) {
-	http.Error(w, "not implemented", http.StatusNotImplemented)
-}
-
-// GlobalFeedJSON handles GET /feed.json.
-func (h *Handlers) GlobalFeedJSON(w http.ResponseWriter, _ *http.Request) {
-	http.Error(w, "not implemented", http.StatusNotImplemented)
-}
+// Stubs filled in by subsequent tasks (9, 10, 11).
 
 // TopicFeedRSS handles GET /topics/{tag}/feed.xml.
 func (h *Handlers) TopicFeedRSS(w http.ResponseWriter, _ *http.Request) {

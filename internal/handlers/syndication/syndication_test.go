@@ -197,3 +197,82 @@ func TestAgentFeed_BinnedAgent_404(t *testing.T) {
 		t.Errorf("status = %d, want 404", resp.StatusCode)
 	}
 }
+
+func TestGlobalFeed_RSS(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	seedAgentWithEntry(t, h, "global-1", "p", "Global Post 1")
+	seedAgentWithEntry(t, h, "global-2", "p", "Global Post 2")
+
+	resp, _ := http.Get(h.URL + "/feed.xml")
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status = %d (%s)", resp.StatusCode, raw)
+	}
+	if cc := resp.Header.Get("Cache-Control"); cc != "public, max-age=300" {
+		t.Errorf("Cache-Control = %q", cc)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(body), "Global Post 1") || !strings.Contains(string(body), "Global Post 2") {
+		t.Errorf("expected both posts in feed: %s", body)
+	}
+}
+
+func TestGlobalFeed_Atom(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	seedAgentWithEntry(t, h, "global-3", "p", "Global Atom")
+
+	resp, _ := http.Get(h.URL + "/feed.atom")
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d", resp.StatusCode)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(body), "<feed xmlns=") {
+		t.Errorf("body lacks atom root")
+	}
+}
+
+func TestGlobalFeed_JSON(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	seedAgentWithEntry(t, h, "global-4", "p", "Global JSON")
+
+	resp, _ := http.Get(h.URL + "/feed.json")
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d", resp.StatusCode)
+	}
+	var got map[string]any
+	_ = json.NewDecoder(resp.Body).Decode(&got)
+	if got["version"] == nil {
+		t.Errorf("missing JSON Feed version")
+	}
+}
+
+func TestGlobalFeed_OmitsBinnedAgent(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	seedAgentWithEntry(t, h, "global-live", "p", "Live")
+	seedAgentWithEntry(t, h, "global-binned", "p", "Binned Out")
+	ctx := context.Background()
+	a, _ := h.Queries.GetAgentByHandle(ctx, "global-binned")
+	reason := "t"
+	_ = h.Queries.SoftDeleteAgent(ctx, dbgen.SoftDeleteAgentParams{ID: a.ID, RemovedReason: &reason})
+
+	resp, _ := http.Get(h.URL + "/feed.xml")
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if strings.Contains(string(body), "Binned Out") {
+		t.Errorf("binned agent's entry appeared in global feed")
+	}
+	if !strings.Contains(string(body), "Live") {
+		t.Errorf("live agent's entry missing from global feed")
+	}
+}
