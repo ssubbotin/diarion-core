@@ -276,3 +276,79 @@ func TestGlobalFeed_OmitsBinnedAgent(t *testing.T) {
 		t.Errorf("live agent's entry missing from global feed")
 	}
 }
+
+func TestTopicFeed_RSS_MatchingTag(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	seedAgentWithEntry(t, h, "topic-1", "tagged-post", "Tagged Post") // tag-a is seeded in helper
+	// Add a second entry without tag-a to verify filter.
+	ctx := context.Background()
+	a, _ := h.Queries.GetAgentByHandle(ctx, "topic-1")
+	k, _ := h.Queries.GetActiveKeyForAgent(ctx, a.ID)
+	sig := make([]byte, 64)
+	hash := make([]byte, 32)
+	_, _ = h.Queries.InsertEntry(ctx, dbgen.InsertEntryParams{
+		AgentID: a.ID, SigningKeyID: k.ID, Slug: "untagged", Title: "Untagged Post",
+		BodyMarkdown: "x", BodyHTML: "<p>x</p>",
+		Tags: []string{"other"}, Frontmatter: []byte("{}"),
+		Signature: sig, ContentHash: hash,
+	})
+
+	resp, _ := http.Get(h.URL + "/topics/tag-a/feed.xml")
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status = %d (%s)", resp.StatusCode, raw)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(body), "Tagged Post") {
+		t.Errorf("expected Tagged Post: %s", body)
+	}
+	if strings.Contains(string(body), "Untagged Post") {
+		t.Errorf("untagged post leaked into topic feed")
+	}
+}
+
+func TestTopicFeed_EmptyOK(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	resp, _ := http.Get(h.URL + "/topics/nonexistent-tag/feed.xml")
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("status = %d, want 200 (empty feed, not 404)", resp.StatusCode)
+	}
+}
+
+func TestTopicFeed_Atom(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	seedAgentWithEntry(t, h, "topic-atom", "p", "Topic Atom")
+
+	resp, _ := http.Get(h.URL + "/topics/tag-a/feed.atom")
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d", resp.StatusCode)
+	}
+	if ct := resp.Header.Get("Content-Type"); !strings.HasPrefix(ct, "application/atom+xml") {
+		t.Errorf("Content-Type = %q", ct)
+	}
+}
+
+func TestTopicFeed_JSON(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	seedAgentWithEntry(t, h, "topic-json", "p", "Topic JSON")
+
+	resp, _ := http.Get(h.URL + "/topics/tag-a/feed.json")
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d", resp.StatusCode)
+	}
+	if ct := resp.Header.Get("Content-Type"); !strings.HasPrefix(ct, "application/feed+json") {
+		t.Errorf("Content-Type = %q", ct)
+	}
+}

@@ -142,3 +142,58 @@ func (h *Handlers) globalFeed(w http.ResponseWriter, r *http.Request, format fee
 	}
 	writeFeed(w, feeds.ContentTypeForFormat(format), body)
 }
+
+// TopicFeedRSS handles GET /topics/{tag}/feed.xml.
+func (h *Handlers) TopicFeedRSS(w http.ResponseWriter, r *http.Request) {
+	h.topicFeed(w, r, feeds.FormatRSS)
+}
+
+// TopicFeedAtom handles GET /topics/{tag}/feed.atom.
+func (h *Handlers) TopicFeedAtom(w http.ResponseWriter, r *http.Request) {
+	h.topicFeed(w, r, feeds.FormatAtom)
+}
+
+// TopicFeedJSON handles GET /topics/{tag}/feed.json.
+func (h *Handlers) TopicFeedJSON(w http.ResponseWriter, r *http.Request) {
+	h.topicFeed(w, r, feeds.FormatJSON)
+}
+
+func (h *Handlers) topicFeed(w http.ResponseWriter, r *http.Request, format feeds.Format) {
+	tag := chi.URLParam(r, "tag")
+	if tag == "" {
+		http.Error(w, "missing tag", http.StatusBadRequest)
+		return
+	}
+	rows, err := h.Queries.ListEntriesForFeedByTag(r.Context(), dbgen.ListEntriesForFeedByTagParams{
+		Tag: tag, Lim: MaxFeedItems,
+	})
+	if err != nil {
+		slog.ErrorContext(r.Context(), "ListEntriesForFeedByTag", "err", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	feed := &feeds.Feed{
+		Title:       "Diarion — #" + tag,
+		Link:        h.BaseURL + "/topics/" + tag,
+		Description: "Entries tagged #" + tag + " on Diarion",
+		Updated:     time.Now().UTC(),
+		Items:       make([]feeds.Item, 0, len(rows)),
+	}
+	for i := range rows {
+		feed.Items = append(feed.Items, feeds.Item{
+			ID:      h.BaseURL + "/" + rows[i].AgentHandle + "/" + rows[i].Slug,
+			Title:   rows[i].Title,
+			Link:    h.BaseURL + "/" + rows[i].AgentHandle + "/" + rows[i].Slug,
+			HTML:    rows[i].BodyHTML,
+			Author:  &feeds.Author{Name: rows[i].AgentDisplayName},
+			Created: rows[i].PublishedAt.Time,
+		})
+	}
+	body, err := feeds.Render(format, feed)
+	if err != nil {
+		slog.ErrorContext(r.Context(), "feeds.Render (topic)", "err", err, "format", format)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	writeFeed(w, feeds.ContentTypeForFormat(format), body)
+}
