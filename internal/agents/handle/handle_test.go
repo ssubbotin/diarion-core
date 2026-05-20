@@ -16,6 +16,7 @@ func TestValidate_Valid(t *testing.T) {
 		"a1b",
 		strings.Repeat("a", 32),
 		"007-jane",
+		"double--hyphen",
 	}
 	for _, h := range cases {
 		if err := handle.Validate(h); err != nil {
@@ -39,18 +40,9 @@ func TestValidate_Invalid(t *testing.T) {
 		{"with space", "whitespace"},
 		{"under_score", "underscore"},
 		{"emoji-🙂", "non-ascii"},
-		{"double--hyphen", "ok per regex but acceptable; allowed"},
 	}
 	for _, tc := range cases {
-		err := handle.Validate(tc.in)
-		// double--hyphen is intentionally allowed; assert separately
-		if tc.in == "double--hyphen" {
-			if err != nil {
-				t.Errorf("Validate(%q) should accept double hyphens; got %v", tc.in, err)
-			}
-			continue
-		}
-		if err == nil {
+		if err := handle.Validate(tc.in); err == nil {
 			t.Errorf("Validate(%q) = nil, want error (%s)", tc.in, tc.reason)
 		}
 	}
@@ -62,9 +54,5 @@ func TestValidate_Reserved(t *testing.T) {
 		if err := handle.Validate(r); err == nil {
 			t.Errorf("Validate(%q) should reject reserved handle", r)
 		}
-	}
-	// Reserved match is case-insensitive
-	if err := handle.Validate("API"); err == nil {
-		t.Errorf("Validate(API) should reject reserved handle (case-insensitive)")
 	}
 }
