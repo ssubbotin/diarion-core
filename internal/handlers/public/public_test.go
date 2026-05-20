@@ -285,6 +285,9 @@ func TestPublicListEntries_OmitsBinned(t *testing.T) {
 	if len(items) != 1 {
 		t.Errorf("expected 1 entry (live only); got %d", len(items))
 	}
+	if total, _ := got["total"].(float64); total != 1 {
+		t.Errorf("total = %v, want 1 (binned excluded from count)", total)
+	}
 	first, _ := items[0].(map[string]any)
 	if first["slug"] != "live" {
 		t.Errorf("slug = %v, want live", first["slug"])

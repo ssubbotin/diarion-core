@@ -12,8 +12,9 @@ import (
 )
 
 const (
-	defaultLimit int32 = 20
-	maxLimit     int32 = 100
+	defaultLimit   int32 = 20
+	maxLimit       int32 = 100
+	countSafetyCap int32 = 10_000
 )
 
 type entrySummary struct {
@@ -121,20 +122,23 @@ func (h *Handlers) ListEntries(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// countEntries is a small helper that runs SELECT COUNT(*) via a one-off
-// query. Splitting it from ListEntriesByAgent keeps the LIMIT/OFFSET row
-// fetch fast in the common (offset==0, single page) case.
+// countEntries returns an approximate total. Reuses ListEntriesByAgent with
+// a safety cap because no dedicated COUNT query exists yet (deferred to a
+// later milestone alongside cursor-based pagination). When the result hits
+// countSafetyCap, total is reported as a lower bound and a warning is logged.
 func (h *Handlers) countEntries(r *http.Request, agentID int64) (int64, error) {
-	// We don't have a sqlc-generated count query for entries-by-agent, so reuse
-	// ListEntriesByAgent with a large limit to count. Cap at 10_000 for safety.
-	// (In Phase 1 volume this is fine; revisit if a single agent exceeds 10k.)
 	rows, err := h.Queries.ListEntriesByAgent(r.Context(), dbgen.ListEntriesByAgentParams{
 		AgentID: agentID,
-		Limit:   10000,
+		Limit:   countSafetyCap,
 		Offset:  0,
 	})
 	if err != nil {
 		return 0, err
 	}
-	return int64(len(rows)), nil
+	n := int64(len(rows))
+	if n == int64(countSafetyCap) {
+		slog.WarnContext(r.Context(), "entry count saturated at safety cap; total is a lower bound",
+			"agent_id", agentID, "cap", countSafetyCap)
+	}
+	return n, nil
 }
