@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
@@ -451,6 +452,152 @@ func TestDelete_404OnAnotherOwnersAgent(t *testing.T) {
 		OwnerID: other.ID, Handle: "x-other-doomed", DisplayName: "Other Doomed", KeyCustody: "managed",
 	})
 	resp := doJSON(t, http.MethodDelete, h.URL+"/api/v1/me/agents/x-other-doomed", h.Cookie, nil)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", resp.StatusCode)
+	}
+}
+
+func TestRotateKey_Managed_RevokesOldAddsNew(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	ctx := context.Background()
+
+	createResp := doJSON(t, http.MethodPost, h.URL+"/api/v1/me/agents", h.Cookie,
+		map[string]any{"handle": "rotator", "display_name": "Rotator", "key_custody": "managed"})
+	defer createResp.Body.Close()
+	var initial map[string]any
+	_ = json.NewDecoder(createResp.Body).Decode(&initial)
+	oldFP := initial["fingerprint"].(string)
+
+	rotResp := doJSON(t, http.MethodPost, h.URL+"/api/v1/me/agents/rotator/keys", h.Cookie, nil)
+	defer rotResp.Body.Close()
+	if rotResp.StatusCode != http.StatusCreated {
+		raw, _ := io.ReadAll(rotResp.Body)
+		t.Fatalf("status = %d (%s)", rotResp.StatusCode, string(raw))
+	}
+	var rotated map[string]any
+	_ = json.NewDecoder(rotResp.Body).Decode(&rotated)
+	newFP := rotated["fingerprint"].(string)
+	if newFP == "" || newFP == oldFP {
+		t.Errorf("rotation should mint a new fingerprint; old=%q new=%q", oldFP, newFP)
+	}
+	if _, has := rotated["private_key"]; has {
+		t.Errorf("managed rotation must NOT return private_key")
+	}
+
+	// Verify DB state: old key revoked, new key active.
+	agent, _ := h.Queries.GetAgentByHandle(ctx, "rotator")
+	all, _ := h.Queries.ListKeysForAgent(ctx, agent.ID)
+	if len(all) != 2 {
+		t.Fatalf("expected 2 keys after rotation, got %d", len(all))
+	}
+	active, _ := h.Queries.GetActiveKeyForAgent(ctx, agent.ID)
+	if active.Fingerprint != newFP {
+		t.Errorf("active key mismatch")
+	}
+	var oldRevoked bool
+	for _, k := range all {
+		if k.Fingerprint == oldFP {
+			oldRevoked = k.Status == "revoked" && k.RevokedAt.Valid
+		}
+	}
+	if !oldRevoked {
+		t.Errorf("old key not revoked")
+	}
+}
+
+func TestRotateKey_Self_ReturnsPlaintext(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	ctx := context.Background()
+
+	createResp := doJSON(t, http.MethodPost, h.URL+"/api/v1/me/agents", h.Cookie,
+		map[string]any{"handle": "self-rot", "display_name": "Self Rot", "key_custody": "self"})
+	createResp.Body.Close()
+
+	rotResp := doJSON(t, http.MethodPost, h.URL+"/api/v1/me/agents/self-rot/keys", h.Cookie, nil)
+	defer rotResp.Body.Close()
+	if rotResp.StatusCode != http.StatusCreated {
+		t.Fatalf("status = %d", rotResp.StatusCode)
+	}
+	var rotated map[string]any
+	_ = json.NewDecoder(rotResp.Body).Decode(&rotated)
+	priv, _ := rotated["private_key"].(string)
+	decoded, err := hex.DecodeString(priv)
+	if err != nil || len(decoded) != ed25519.PrivateKeySize {
+		t.Fatalf("private_key invalid: len=%d err=%v", len(decoded), err)
+	}
+
+	agent, _ := h.Queries.GetAgentByHandle(ctx, "self-rot")
+	active, _ := h.Queries.GetActiveKeyForAgent(ctx, agent.ID)
+	if active.EncryptedPrivateKey != nil {
+		t.Errorf("self rotation must not store encrypted privkey")
+	}
+	sig := ed25519.Sign(ed25519.PrivateKey(decoded), []byte("verify-me"))
+	if !ed25519.Verify(ed25519.PublicKey(active.PublicKey), []byte("verify-me"), sig) {
+		t.Errorf("returned privkey doesn't verify against stored pubkey")
+	}
+}
+
+func TestRevokeKey_Explicit(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	ctx := context.Background()
+
+	createResp := doJSON(t, http.MethodPost, h.URL+"/api/v1/me/agents", h.Cookie,
+		map[string]any{"handle": "kill-key", "display_name": "Kill Key", "key_custody": "managed"})
+	createResp.Body.Close()
+	agent, _ := h.Queries.GetAgentByHandle(ctx, "kill-key")
+
+	// Mint a second key so the agent has multiple to choose from.
+	rotResp := doJSON(t, http.MethodPost, h.URL+"/api/v1/me/agents/kill-key/keys", h.Cookie, nil)
+	rotResp.Body.Close()
+
+	all, _ := h.Queries.ListKeysForAgent(ctx, agent.ID)
+	var newest = all[0]
+	for _, k := range all {
+		if k.CreatedAt.Time.After(newest.CreatedAt.Time) {
+			newest = k
+		}
+	}
+
+	url := h.URL + "/api/v1/me/agents/kill-key/keys/" + strconv.FormatInt(newest.ID, 10)
+	revResp := doJSON(t, http.MethodDelete, url, h.Cookie, nil)
+	defer revResp.Body.Close()
+	if revResp.StatusCode != http.StatusNoContent {
+		t.Errorf("revoke status = %d, want 204", revResp.StatusCode)
+	}
+
+	all2, _ := h.Queries.ListKeysForAgent(ctx, agent.ID)
+	for _, k := range all2 {
+		if k.ID == newest.ID && k.Status != "revoked" {
+			t.Errorf("expected key %d revoked, got status %q", k.ID, k.Status)
+		}
+	}
+}
+
+func TestRevokeKey_NotOwned_Returns404(t *testing.T) {
+	t.Parallel()
+	h := setupHarness(t)
+	defer h.Close()
+	ctx := context.Background()
+
+	other, _ := h.Queries.InsertUser(ctx, dbgen.InsertUserParams{
+		GoogleSub: "other-g-4", Email: "other4@e.com", DisplayName: "Other4",
+	})
+	otherAgent, _ := h.Queries.InsertAgent(ctx, dbgen.InsertAgentParams{
+		OwnerID: other.ID, Handle: "x-other-rot", DisplayName: "Other Rot", KeyCustody: "managed",
+	})
+	key, _ := h.Queries.InsertAgentKey(ctx, dbgen.InsertAgentKeyParams{
+		AgentID: otherAgent.ID, PublicKey: make([]byte, 32), Fingerprint: "deadbeef",
+	})
+
+	url := h.URL + "/api/v1/me/agents/x-other-rot/keys/" + strconv.FormatInt(key.ID, 10)
+	resp := doJSON(t, http.MethodDelete, url, h.Cookie, nil)
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Errorf("status = %d, want 404", resp.StatusCode)
