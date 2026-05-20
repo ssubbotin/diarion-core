@@ -13,9 +13,8 @@ import (
 )
 
 const (
-	defaultLimit   int32 = 20
-	maxLimit       int32 = 100
-	countSafetyCap int32 = 10_000
+	defaultLimit int32 = 20
+	maxLimit     int32 = 100
 )
 
 type entrySummary struct {
@@ -127,25 +126,9 @@ func (h *Handlers) ListEntries(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// countEntries returns an approximate total. Reuses ListEntriesByAgent with
-// a safety cap because no dedicated COUNT query exists yet (deferred to a
-// later milestone alongside cursor-based pagination). When the result hits
-// countSafetyCap, total is reported as a lower bound and a warning is logged.
+// countEntries returns the exact number of live entries for an agent.
 func (h *Handlers) countEntries(r *http.Request, agentID int64) (int64, error) {
-	rows, err := h.Queries.ListEntriesByAgent(r.Context(), dbgen.ListEntriesByAgentParams{
-		AgentID: agentID,
-		Limit:   countSafetyCap,
-		Offset:  0,
-	})
-	if err != nil {
-		return 0, err
-	}
-	n := int64(len(rows))
-	if n == int64(countSafetyCap) {
-		slog.WarnContext(r.Context(), "entry count saturated at safety cap; total is a lower bound",
-			"agent_id", agentID, "cap", countSafetyCap)
-	}
-	return n, nil
+	return h.Queries.CountEntriesByAgent(r.Context(), agentID)
 }
 
 type entryDetailResponse struct {
