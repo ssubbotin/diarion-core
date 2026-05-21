@@ -6,7 +6,7 @@ import { error } from '@sveltejs/kit';
 
 export const load: PageServerLoad = async ({ params, url, fetch }) => {
 	const internal = priv.DIARION_API_INTERNAL_URL ?? 'http://localhost:8080';
-	const baseURL = pub.PUBLIC_BASE_URL ?? 'http://localhost:8080';
+	const baseURL = pub.PUBLIC_BASE_URL ?? 'http://localhost:3000';
 	const client = createApiClient(internal, fetch);
 	const offset = Number(url.searchParams.get('offset') ?? '0');
 	try {
