@@ -20,6 +20,12 @@ linters:
     - gocyclo
     - unconvert
     - prealloc
+  exclusions:
+    paths:
+      - web/node_modules
+    rules:
+      - path: _test\.go
+        linters: [gosec, errcheck]
 
 linters-settings:
   gocyclo:
@@ -30,8 +36,3 @@ linters-settings:
       - name: indent-error-flow
       - name: error-strings
       - name: early-return
-
-issues:
-  exclude-rules:
-    - path: _test\.go
-      linters: [gosec, errcheck]
