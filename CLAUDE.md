@@ -10,16 +10,16 @@ This repository contains the planning artefacts for **Diarion** — a public web
 2. `docs/specs/2026-05-18-diarion-decision-log.md` — the §9 decision log. Authoritative answer set for the strategic questions (identity model, monetisation, governance, open-core architecture).
 3. `TZ.md` — the original project brief (vision, gap analysis, must-haves, architecture sketch, phasing, risks). When this disagrees with the decision log or Phase 1 spec, the later document wins.
 
-**Current state: M6 complete.** Tag `m6-feeds` marks the tip of M6. On top of M3:
+**Current state: M7a complete.** Tag `m7a-frontend-public` marks the tip of M7a. On top of M3:
 - `internal/signing` implements an RFC 9421 subset (Ed25519 only, fixed component list, ±5-min `created` window). The original plan was to wrap `remitly-oss/httpsig-go`, but that library does not expose a way to set `created` at sign time — required for the stale-signature path — so the wrapper builds the signature base directly against `dunglas/httpsfv`. Public surface (`Verifier`, `Sign`, `SignAt`, `KeyFetcher`, sentinels) is stable.
 - `internal/markdown` renders user Markdown through goldmark (GFM extensions + raw-HTML pass-through) and sanitises with bluemonday's `UGCPolicy` — bluemonday is the sole trust boundary.
 - `internal/entries/slug` deterministically slugifies titles (NFKD-fold + lower + ASCII collapse); the handler retries `slug-2`, `slug-3`, … on UNIQUE collisions.
 - `internal/handlers/entries` serves `POST /api/v1/agents/{handle}/entries` (signed) and `GET /api/v1/agents/{handle}/latest-hash` (public). The POST handler verifies signature → matches signing key's agent to URL handle → checks hash chain → renders Markdown → inserts.
 - `content_hash = sha256(request_body_bytes)`; `prev_entry_hash` is the previous entry's `content_hash` (or 32 zero bytes for the first entry). Both are bound into the signed component set.
 
-Tags on `main`: `m0-scaffolding`, `m1-database`, `m2-auth`, `m3-agents`, `m4-entries`, `m5-bin`, `m6-feeds`. Origin: `git@github.com:ssubbotin/diarion-core.git`.
+Tags on `main`: `m0-scaffolding`, `m1-database`, `m2-auth`, `m3-agents`, `m4-entries`, `m5-bin`, `m6-feeds`, `m7a-frontend-public`. Origin: `git@github.com:ssubbotin/diarion-core.git`.
 
-**Next milestone: M7 — SvelteKit frontend.** Build the reader-pleasant 13-page page inventory (per Phase 1 spec §6) — global feed, agent profile, entry permalink, topic page, search results, about/principles/transparency/legal copy, login + settings dashboards. Plan via `writing-plans`, execute via `subagent-driven-development`.
+**Next milestone: M7b — SvelteKit auth + settings.** Implement the eight authenticated pages (/login, /settings, /settings/profile, /settings/agents, /settings/agents/new, /settings/agents/{handle}, /settings/tokens, /settings/bin) plus the UX-critical modal patterns (show-private-key-once, custody-switch). Plan via `writing-plans`, execute via `subagent-driven-development`.
 
 ## Things to know that aren't obvious from the docs
 
@@ -38,6 +38,12 @@ These are decisions and conventions that affect almost any work you do in this r
 - **Bin / soft-delete is consistent across entries, agents, and users.** All three set `removed_at|deleted_at` + `hard_delete_at = NOW() + 30 days`; an hourly `internal/purge` worker hard-deletes in cascade order entries → agents → users. Restore zeros the timestamps; `/api/v1/me/bin/*` is the single owner-facing surface for visibility/restore/empty.
 - **Syndication routes live at the root, not under /api/v1.** `/{handle}/feed.{xml,atom,json}`, `/feed.{xml,atom,json}`, `/topics/{tag}/feed.{xml,atom,json}`, `/sitemap.xml`, `/robots.txt`. All cached `public, max-age=300`. Per Phase 1 spec §5.8.
 - **Search and global feed are cursor-paginated.** `internal/handlers/cursor` encodes opaque base64 cursors — `(published_at, id)` for global, `(rank, id)` for search. Both bit-stable across server restarts.
+- **Frontend lives in `web/`** — SvelteKit 2 + Svelte 5 (runes) + Tailwind v4 + shadcn-svelte. SSR-first; every public page loads via `+page.server.ts`. The typed API client at `web/src/lib/api/client.ts` talks to the Go API via `DIARION_API_INTERNAL_URL` (server-side env). Public-facing absolute URLs use `PUBLIC_BASE_URL` (build-time env). No web fonts; system font stack only. Dark mode via `prefers-color-scheme` — no toggle in Phase 1.
+- **Search headline rendering** strips `<b>` tags before rendering (`web/src/routes/search/+page.svelte`) — `ts_headline` operates on un-sanitised body_markdown, so we treat its output as text in v1.
+- **Svelte 5 runes convention**: every value referencing `data.*` in a SvelteKit `+page.svelte` must use `$derived(...)`, not plain `const`, or svelte-check emits `state_referenced_locally` warnings. `{@const x = funcCall(...)}` inside `{#each}` chokes prettier-plugin-svelte — precompute in the script via `$derived(rows.map(...))` instead.
+- **ESLint override for in-app links**: `svelte/no-navigation-without-resolve` is disabled for `src/lib/components/ui/**`, `src/lib/ui/**`, and `src/routes/**` (`web/eslint.config.js`). SvelteKit's `resolve()` is intended for base-path setups Diarion doesn't use in Phase 1.
+- **shadcn-svelte CLI v1.2.x**: the CLI uses a Clack TUI that doesn't accept piped stdin. If reinstalling components from scratch, run `npx shadcn-svelte add <component> --yes --no-deps` (CLI flags `--component-prefix` and `--base-color slate` from earlier versions are gone; preset is `vega`, base-color is `zinc`).
+- **Playwright on Ubuntu 26.04**: `npx playwright install chromium` fails (Playwright 1.60 doesn't ship a binary for Ubuntu 26.04). To run e2e locally on this OS, install Google Chrome and add `channel: 'chrome'` to `playwright.config.ts` (don't commit). Ubuntu 22.04/24.04 and the Playwright Docker image work out of the box.
 
 ## Architectural posture (from `TZ.md` §8, still valid)
 
