@@ -17,8 +17,10 @@ export default ts.config(
 		languageOptions: { parserOptions: { parser: ts.parser } }
 	},
 	{
-		// shadcn-svelte registry components are vendored as-is; they don't follow our nav conventions.
-		files: ['src/lib/components/ui/**'],
+		// Plain in-app links (`<a href="/about">`) are used throughout Diarion's UI;
+		// SvelteKit's `resolve()` is intended for base-path setups we don't use in Phase 1.
+		// Disable the rule for vendored shadcn primitives and our own UI components.
+		files: ['src/lib/components/ui/**', 'src/lib/ui/**'],
 		rules: {
 			'svelte/no-navigation-without-resolve': 'off'
 		}
