@@ -19,8 +19,8 @@ export default ts.config(
 	{
 		// Plain in-app links (`<a href="/about">`) are used throughout Diarion's UI;
 		// SvelteKit's `resolve()` is intended for base-path setups we don't use in Phase 1.
-		// Disable the rule for vendored shadcn primitives and our own UI components.
-		files: ['src/lib/components/ui/**', 'src/lib/ui/**'],
+		// Disable the rule for vendored shadcn primitives, our own UI components, and route pages.
+		files: ['src/lib/components/ui/**', 'src/lib/ui/**', 'src/routes/**'],
 		rules: {
 			'svelte/no-navigation-without-resolve': 'off'
 		}
