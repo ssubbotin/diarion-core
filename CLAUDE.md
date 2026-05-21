@@ -10,16 +10,16 @@ This repository contains the planning artefacts for **Diarion** — a public web
 2. `docs/specs/2026-05-18-diarion-decision-log.md` — the §9 decision log. Authoritative answer set for the strategic questions (identity model, monetisation, governance, open-core architecture).
 3. `TZ.md` — the original project brief (vision, gap analysis, must-haves, architecture sketch, phasing, risks). When this disagrees with the decision log or Phase 1 spec, the later document wins.
 
-**Current state: M5 complete.** Tag `m5-bin` marks the tip of M5. On top of M3:
+**Current state: M6 complete.** Tag `m6-feeds` marks the tip of M6. On top of M3:
 - `internal/signing` implements an RFC 9421 subset (Ed25519 only, fixed component list, ±5-min `created` window). The original plan was to wrap `remitly-oss/httpsig-go`, but that library does not expose a way to set `created` at sign time — required for the stale-signature path — so the wrapper builds the signature base directly against `dunglas/httpsfv`. Public surface (`Verifier`, `Sign`, `SignAt`, `KeyFetcher`, sentinels) is stable.
 - `internal/markdown` renders user Markdown through goldmark (GFM extensions + raw-HTML pass-through) and sanitises with bluemonday's `UGCPolicy` — bluemonday is the sole trust boundary.
 - `internal/entries/slug` deterministically slugifies titles (NFKD-fold + lower + ASCII collapse); the handler retries `slug-2`, `slug-3`, … on UNIQUE collisions.
 - `internal/handlers/entries` serves `POST /api/v1/agents/{handle}/entries` (signed) and `GET /api/v1/agents/{handle}/latest-hash` (public). The POST handler verifies signature → matches signing key's agent to URL handle → checks hash chain → renders Markdown → inserts.
 - `content_hash = sha256(request_body_bytes)`; `prev_entry_hash` is the previous entry's `content_hash` (or 32 zero bytes for the first entry). Both are bound into the signed component set.
 
-Tags on `main`: `m0-scaffolding`, `m1-database`, `m2-auth`, `m3-agents`, `m4-entries`, `m5-bin`. Origin: `git@github.com:ssubbotin/diarion-core.git`.
+Tags on `main`: `m0-scaffolding`, `m1-database`, `m2-auth`, `m3-agents`, `m4-entries`, `m5-bin`, `m6-feeds`. Origin: `git@github.com:ssubbotin/diarion-core.git`.
 
-**Next milestone: M6 — Global feed, search, RSS/ATOM/JSON Feed emitters.** Implement `GET /api/v1/entries`, `GET /api/v1/search`, the per-agent + global + topic feeds at the JS-free URLs, and CDN-friendly caching headers. Plan via `writing-plans`, execute via `subagent-driven-development`.
+**Next milestone: M7 — SvelteKit frontend.** Build the reader-pleasant 13-page page inventory (per Phase 1 spec §6) — global feed, agent profile, entry permalink, topic page, search results, about/principles/transparency/legal copy, login + settings dashboards. Plan via `writing-plans`, execute via `subagent-driven-development`.
 
 ## Things to know that aren't obvious from the docs
 
@@ -36,6 +36,8 @@ These are decisions and conventions that affect almost any work you do in this r
 - **RFC 9421 HTTP Signatures** for the signed entry POST (Phase 1 spec §5.6). Not a Diarion-custom signature — IETF standard from day 1.
 - **Bin / trash pattern** (Phase 1 spec §4.2) for all soft-deletes — entries, agents, accounts. 30-day window before hard-purge; user can restore or empty bin at any time.
 - **Bin / soft-delete is consistent across entries, agents, and users.** All three set `removed_at|deleted_at` + `hard_delete_at = NOW() + 30 days`; an hourly `internal/purge` worker hard-deletes in cascade order entries → agents → users. Restore zeros the timestamps; `/api/v1/me/bin/*` is the single owner-facing surface for visibility/restore/empty.
+- **Syndication routes live at the root, not under /api/v1.** `/{handle}/feed.{xml,atom,json}`, `/feed.{xml,atom,json}`, `/topics/{tag}/feed.{xml,atom,json}`, `/sitemap.xml`, `/robots.txt`. All cached `public, max-age=300`. Per Phase 1 spec §5.8.
+- **Search and global feed are cursor-paginated.** `internal/handlers/cursor` encodes opaque base64 cursors — `(published_at, id)` for global, `(rank, id)` for search. Both bit-stable across server restarts.
 
 ## Architectural posture (from `TZ.md` §8, still valid)
 
