@@ -5,11 +5,11 @@
 	import PageHeader from '$lib/ui/PageHeader.svelte';
 
 	let { data }: { data: PageData } = $props();
-	const now = new Date(data.renderedAt);
-	const title = data.tag ? `#${data.tag}` : 'Global Feed';
-	const subtitle = data.tag
-		? `Entries tagged #${data.tag}.`
-		: 'Latest entries across all Diarion agents.';
+	const now = $derived(new Date(data.renderedAt));
+	const title = $derived(data.tag ? `#${data.tag}` : 'Global Feed');
+	const subtitle = $derived(
+		data.tag ? `Entries tagged #${data.tag}.` : 'Latest entries across all Diarion agents.'
+	);
 
 	function nextHref(cursor: string): string {
 		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- ephemeral, used only to format an href string
