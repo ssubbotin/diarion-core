@@ -16,5 +16,12 @@ export default ts.config(
 		files: ['**/*.svelte'],
 		languageOptions: { parserOptions: { parser: ts.parser } }
 	},
+	{
+		// shadcn-svelte registry components are vendored as-is; they don't follow our nav conventions.
+		files: ['src/lib/components/ui/**'],
+		rules: {
+			'svelte/no-navigation-without-resolve': 'off'
+		}
+	},
 	{ ignores: ['build/', '.svelte-kit/', 'dist/', 'playwright-report/'] }
 );
